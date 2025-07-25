@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PillBridge - Medication Care Made Simple</title>
+    <meta name="description" content="PillBridge helps elderly patients and caregivers manage medications with smart reminders, tracking, and support." />
+    
+    <!-- Preconnect to external domains for performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Google Fonts for better readability -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+      /* Global styles for better accessibility */
+      * {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      }
+      
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%);
+      }
+      
+      /* Ensure minimum font sizes for elderly users */
+      html {
+        font-size: 16px;
+      }
+      
+      @media (max-width: 768px) {
+        html {
+          font-size: 18px;
+        }
+      }
+      
+      /* High contrast focus indicators */
+      *:focus {
+        outline: 3px solid #3b82f6;
+        outline-offset: 2px;
+      }
+      
+      /* Loading spinner */
+      .loading-spinner {
+        animation: spin 1s linear infinite;
+      }
+      
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    
+    <script>
+      // Request notification permission on page load
+      if ('Notification' in window && 'serviceWorker' in navigator) {
+        Notification.requestPermission();
+      }
+    </script>
+  </body>
+</html>
