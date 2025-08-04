@@ -3,6 +3,26 @@ const router = express.Router();
 const { connectDb } = require('../db');
 const { ObjectId } = require('mongodb');
 
+// Function to create mood notification for caregiver
+async function createMoodNotification(db, entry) {
+  if (!entry.patient_id) return;
+  
+  const patient = await db.collection('users').findOne({ _id: new ObjectId(entry.patient_id) });
+  if (patient && patient.linked_caregiver_id) {
+    const notification = {
+      caregiver_id: patient.linked_caregiver_id,
+      patient_id: entry.patient_id,
+      patient_name: patient.full_name,
+      mood_score: entry.mood_score,
+      date: entry.date,
+      notes: entry.notes || null,
+      created_at: new Date().toISOString(),
+      read: false
+    };
+    await db.collection('mood_notifications').insertOne(notification);
+  }
+}
+
 // GET /mood_entries?patient_id=...&limit=...
 router.get('/', async (req, res) => {
   try {
@@ -26,6 +46,10 @@ router.post('/', async (req, res) => {
     entry.created_at = new Date().toISOString();
     const result = await db.collection('mood_entries').insertOne(entry);
     entry._id = result.insertedId;
+    
+    // Create notification for caregiver
+    await createMoodNotification(db, entry);
+    
     res.json(entry);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -40,6 +64,10 @@ router.put('/:id', async (req, res) => {
     const update = req.body;
     await db.collection('mood_entries').updateOne({ _id: new ObjectId(id) }, { $set: update });
     const entry = await db.collection('mood_entries').findOne({ _id: new ObjectId(id) });
+    
+    // Create notification for caregiver when mood is updated
+    await createMoodNotification(db, entry);
+    
     res.json(entry);
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -13,6 +13,13 @@ export function PatientCard({ patient }: PatientCardProps) {
 
   useEffect(() => {
     fetchPatientData();
+    
+    // Set up automatic refresh every 5 minutes for real-time progress updates
+    const intervalId = setInterval(() => {
+      fetchPatientData();
+    }, 300000); // Refresh every 5 minutes
+    
+    return () => clearInterval(intervalId); // Cleanup on unmount
   }, [patient._id]);
 
   const fetchPatientData = async () => {

@@ -71,6 +71,19 @@ export interface GameScore {
   created_at: string;
 }
 
+export interface MoodNotification {
+  _id: string;
+  caregiver_id: string;
+  patient_id: string;
+  patient_name: string;
+  mood_score: number;
+  date: string;
+  notes?: string;
+  created_at: string;
+  read: boolean;
+  read_at?: string;
+}
+
 // API functions
 export const apiClient = {
   // User management
@@ -193,6 +206,27 @@ export const apiClient = {
     update: async (userId: string, emergencyData: { emergency_contact?: string; emergency_phone?: string }) => {
       const response = await api.put(`/emergency/${userId}`, emergencyData);
       return response.data;
+    },
+  },
+
+  // Mood Notifications
+  moodNotifications: {
+    getByCaregiverId: async (caregiverId: string, unreadOnly: boolean = false): Promise<MoodNotification[]> => {
+      const params = new URLSearchParams();
+      if (unreadOnly) params.append('unread_only', 'true');
+      const response = await api.get(`/mood_notifications/${caregiverId}?${params.toString()}`);
+      return response.data;
+    },
+    markAsRead: async (id: string): Promise<MoodNotification> => {
+      const response = await api.put(`/mood_notifications/${id}/read`);
+      return response.data;
+    },
+    markAllAsRead: async (caregiverId: string): Promise<{ modified_count: number }> => {
+      const response = await api.put(`/mood_notifications/mark-all-read/${caregiverId}`);
+      return response.data;
+    },
+    delete: async (id: string): Promise<void> => {
+      await api.delete(`/mood_notifications/${id}`);
     },
   },
 };

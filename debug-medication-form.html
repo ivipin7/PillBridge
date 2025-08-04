@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Medication Form</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .form-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #ffe6e6;
+            border-radius: 4px;
+        }
+        .success {
+            color: green;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #e6ffe6;
+            border-radius: 4px;
+        }
+        .checkbox-group {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .log-output {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <h1>🧪 Debug Medication Creation Form</h1>
+        <p>This page helps you test medication creation without the full React app.</p>
+        
+        <form id="medicationForm">
+            <div class="form-group">
+                <label for="patient_id">Patient ID:</label>
+                <input type="text" id="patient_id" name="patient_id" value="test-patient-123" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="name">Medication Name:</label>
+                <input type="text" id="name" name="name" value="Test Aspirin" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="dosage">Dosage:</label>
+                <input type="text" id="dosage" name="dosage" value="10mg" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="total_count">Total Pills:</label>
+                <input type="number" id="total_count" name="total_count" value="30" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="current_count">Current Pills:</label>
+                <input type="number" id="current_count" name="current_count" value="30" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="low_stock_threshold">Low Stock Threshold:</label>
+                <input type="number" id="low_stock_threshold" name="low_stock_threshold" value="5">
+            </div>
+            
+            <div class="form-group">
+                <label>Dose Schedule:</label>
+                <div class="checkbox-group">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="morning_dose" name="morning_dose" checked>
+                        <label for="morning_dose">Morning</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="afternoon_dose" name="afternoon_dose">
+                        <label for="afternoon_dose">Afternoon</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="night_dose" name="night_dose" checked>
+                        <label for="night_dose">Night</label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="morning_time">Morning Time:</label>
+                <input type="time" id="morning_time" name="morning_time" value="08:00">
+            </div>
+            
+            <div class="form-group">
+                <label for="afternoon_time">Afternoon Time:</label>
+                <input type="time" id="afternoon_time" name="afternoon_time" value="14:00">
+            </div>
+            
+            <div class="form-group">
+                <label for="night_time">Night Time:</label>
+                <input type="time" id="night_time" name="night_time" value="20:00">
+            </div>
+            
+            <div class="form-group">
+                <label for="instructions">Instructions:</label>
+                <textarea id="instructions" name="instructions" rows="3" placeholder="Take with food, avoid dairy, etc."></textarea>
+            </div>
+            
+            <button type="submit" id="submitBtn">Create Medication</button>
+        </form>
+        
+        <div id="result"></div>
+        <div id="logOutput" class="log-output"></div>
+    </div>
+
+    <script>
+        const logOutput = document.getElementById('logOutput');
+        const resultDiv = document.getElementById('result');
+        
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            logOutput.innerHTML += `[${timestamp}] ${message}\n`;
+            logOutput.scrollTop = logOutput.scrollHeight;
+            console.log(message);
+        }
+        
+        document.getElementById('medicationForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Creating...';
+            
+            // Clear previous results
+            resultDiv.innerHTML = '';
+            logOutput.innerHTML = '';
+            
+            log('🚀 Starting medication creation...');
+            
+            // Gather form data
+            const formData = new FormData(e.target);
+            const medicationData = {
+                patient_id: formData.get('patient_id'),
+                name: formData.get('name'),
+                dosage: formData.get('dosage'),
+                total_count: parseInt(formData.get('total_count')),
+                current_count: parseInt(formData.get('current_count')),
+                low_stock_threshold: parseInt(formData.get('low_stock_threshold')) || 5,
+                morning_dose: formData.has('morning_dose'),
+                afternoon_dose: formData.has('afternoon_dose'),
+                night_dose: formData.has('night_dose'),
+                morning_time: formData.get('morning_time'),
+                afternoon_time: formData.get('afternoon_time'),
+                night_time: formData.get('night_time'),
+                instructions: formData.get('instructions'),
+                image_url: null,
+                audio_url: null
+            };
+            
+            log('📤 Sending medication data: ' + JSON.stringify(medicationData, null, 2));
+            
+            try {
+                const response = await fetch('http://localhost:3000/medications', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(medicationData)
+                });
+                
+                log(`📡 Response status: ${response.status} ${response.statusText}`);
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    log('✅ Medication created successfully!');
+                    log('📄 Response: ' + JSON.stringify(result, null, 2));
+                    
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <strong>✅ Success!</strong><br>
+                            Medication "${result.name}" created successfully!<br>
+                            ID: ${result._id}
+                        </div>
+                    `;
+                } else {
+                    const errorText = await response.text();
+                    log('❌ Medication creation failed: ' + errorText);
+                    
+                    resultDiv.innerHTML = `
+                        <div class="error">
+                            <strong>❌ Error ${response.status}:</strong><br>
+                            ${errorText}
+                        </div>
+                    `;
+                }
+                
+            } catch (error) {
+                log('🔥 Network error: ' + error.message);
+                
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <strong>🔥 Network Error:</strong><br>
+                        ${error.message}<br>
+                        <small>Make sure the backend server is running on port 3000</small>
+                    </div>
+                `;
+            }
+            
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Create Medication';
+        });
+        
+        log('🧪 Debug form loaded. Ready to test medication creation!');
+    </script>
+</body>
+</html>

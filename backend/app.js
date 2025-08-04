@@ -9,8 +9,11 @@ var usersRouter = require('./routes/users');
 var medicationsRouter = require('./routes/medications');
 var remindersRouter = require('./routes/reminders');
 var moodEntriesRouter = require('./routes/mood_entries');
+var moodNotificationsRouter = require('./routes/mood_notifications');
 var gameScoresRouter = require('./routes/game_scores');
 var emergencyRouter = require('./routes/emergency');
+var uploadRouter = require('./routes/upload');
+var imagesRouter = require('./routes/images');
 
 var app = express();
 
@@ -29,7 +32,10 @@ app.use('/users', usersRouter);
 app.use('/medications', medicationsRouter);
 app.use('/reminders', remindersRouter);
 app.use('/mood_entries', moodEntriesRouter);
+app.use('/mood_notifications', moodNotificationsRouter);
 app.use('/game_scores', gameScoresRouter);
 app.use('/emergency', emergencyRouter);
+app.use('/upload', uploadRouter);
+app.use('/images', imagesRouter);
 
 module.exports = app;

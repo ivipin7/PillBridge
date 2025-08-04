@@ -1,20 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { apiClient, User, Reminder } from '../../lib/api';
+import { apiClient, User, Reminder, MoodNotification } from '../../lib/api';
 import { PatientCard } from './PatientCard';
-import { Users, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { Users, AlertTriangle, CheckCircle, Clock, Heart, Bell } from 'lucide-react';
 
 export function CaregiverDashboard() {
   const { userProfile } = useAuth();
   const [patients, setPatients] = useState<User[]>([]);
   const [alerts, setAlerts] = useState<Reminder[]>([]);
+  const [moodNotifications, setMoodNotifications] = useState<MoodNotification[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (userProfile) {
       fetchPatients();
       fetchAlerts();
+      fetchMoodNotifications();
     }
+    // Set up automatic refresh every 5 minutes
+    const intervalId = setInterval(() => {
+      if (userProfile) {
+        fetchPatients();
+        fetchAlerts();
+        fetchMoodNotifications();
+      }
+    }, 300000); // Fetch every 5 minutes
+    return () => clearInterval(intervalId); // Cleanup on unmount
   }, [userProfile]);
 
   const fetchPatients = async () => {
@@ -41,6 +52,58 @@ export function CaregiverDashboard() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchMoodNotifications = async () => {
+    try {
+      if (!userProfile?._id) return;
+      
+      console.log('Fetching mood notifications for caregiver:', userProfile._id);
+      const notifications = await apiClient.moodNotifications.getByCaregiverId(userProfile._id);
+      console.log('Fetched mood notifications:', notifications);
+      setMoodNotifications(notifications);
+    } catch (error) {
+      console.error('Error fetching mood notifications:', error);
+      setMoodNotifications([]);
+    }
+  };
+
+  const handleMarkNotificationAsRead = async (id: string) => {
+    try {
+      await apiClient.moodNotifications.markAsRead(id);
+      // Update local state
+      setMoodNotifications(prev => 
+        prev.map(notification => 
+          notification._id === id 
+            ? { ...notification, read: true, read_at: new Date().toISOString() }
+            : notification
+        )
+      );
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
+  const getMoodEmoji = (score: number) => {
+    const moodMap = {
+      1: '😢',
+      2: '😟', 
+      3: '😐',
+      4: '😊',
+      5: '😄'
+    };
+    return moodMap[score as keyof typeof moodMap] || '😐';
+  };
+
+  const getMoodLabel = (score: number) => {
+    const labelMap = {
+      1: 'Very Sad',
+      2: 'Sad',
+      3: 'Okay',
+      4: 'Good', 
+      5: 'Great'
+    };
+    return labelMap[score as keyof typeof labelMap] || 'Unknown';
   };
 
   if (loading) {
@@ -152,6 +215,83 @@ export function CaregiverDashboard() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Mood Notifications */}
+      {moodNotifications.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-lg p-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center">
+            <Heart className="h-6 w-6 text-purple-500 mr-2" />
+            Recent Mood Updates
+            {moodNotifications.filter(n => !n.read).length > 0 && (
+              <span className="ml-2 bg-purple-100 text-purple-800 text-sm font-medium px-2 py-1 rounded-full">
+                {moodNotifications.filter(n => !n.read).length} new
+              </span>
+            )}
+          </h2>
+          <div className="space-y-3">
+            {moodNotifications.slice(0, 10).map((notification) => (
+              <div 
+                key={notification._id} 
+                className={`border rounded-lg p-4 transition-all duration-200 ${
+                  notification.read 
+                    ? 'bg-gray-50 border-gray-200' 
+                    : 'bg-purple-50 border-purple-200 shadow-sm'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="text-3xl">{getMoodEmoji(notification.mood_score)}</div>
+                    <div>
+                      <p className="font-semibold text-gray-900">
+                        {notification.patient_name}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        Mood: {getMoodLabel(notification.mood_score)} ({notification.mood_score}/5)
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(notification.created_at).toLocaleDateString()} at {new Date(notification.created_at).toLocaleTimeString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {!notification.read && (
+                      <button
+                        onClick={() => handleMarkNotificationAsRead(notification._id)}
+                        className="px-3 py-1 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 transition-colors"
+                      >
+                        Mark Read
+                      </button>
+                    )}
+                    <div className="text-right">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        notification.read 
+                          ? 'bg-gray-100 text-gray-600' 
+                          : 'bg-purple-100 text-purple-800'
+                      }`}>
+                        {notification.read ? 'Read' : 'New'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                {notification.notes && (
+                  <div className="mt-3 p-3 bg-white rounded-lg">
+                    <p className="text-sm text-gray-700">
+                      <span className="font-medium">Notes:</span> {notification.notes}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          {moodNotifications.length > 10 && (
+            <div className="mt-4 text-center">
+              <p className="text-sm text-gray-500">
+                Showing 10 of {moodNotifications.length} notifications
+              </p>
+            </div>
+          )}
         </div>
       )}
 

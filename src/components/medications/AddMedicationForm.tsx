@@ -1,12 +1,90 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Upload, Camera, Pill } from 'lucide-react';
+import { apiClient } from '../../lib/api';
 
 interface AddMedicationFormProps {
   onMedicationAdded: () => void;
 }
 
 const API_BASE = 'http://localhost:3000';
+
+// File upload function - now supports both GridFS (images) and filesystem (audio)
+const uploadFile = async (file: File, type: 'image' | 'audio'): Promise<string> => {
+  const formData = new FormData();
+  
+  if (type === 'image') {
+    // Use new MongoDB GridFS endpoint for images
+    formData.append('image', file);
+    formData.append('category', 'medication');
+    
+    console.log(`🖼️ Uploading image to MongoDB GridFS:`, {
+      filename: file.name,
+      size: file.size,
+      type: file.type,
+      endpoint: `${API_BASE}/images`
+    });
+    
+    try {
+      const response = await fetch(`${API_BASE}/images`, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      console.log('📡 Response status:', response.status, response.statusText);
+      
+      if (!response.ok) {
+        let errorData;
+        const contentType = response.headers.get('content-type');
+        
+        if (contentType && contentType.includes('application/json')) {
+          errorData = await response.json();
+        } else {
+          const errorText = await response.text();
+          errorData = { error: errorText || `HTTP ${response.status}` };
+        }
+        
+        console.error('❌ Image upload to MongoDB failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData
+        });
+        throw new Error(errorData.error || `Failed to upload image (${response.status})`);
+      }
+      
+      const data = await response.json();
+      console.log('✅ Image uploaded successfully to MongoDB:', data);
+      return data.url;
+    } catch (fetchError) {
+      console.error('🔥 Network error during image upload:', fetchError);
+      if (fetchError.message.includes('Failed to fetch')) {
+        throw new Error('Cannot connect to server. Make sure the backend is running on port 3000.');
+      }
+      throw fetchError;
+    }
+  } else {
+    // Use existing filesystem endpoint for audio files
+    formData.append('file', file);
+    formData.append('type', type);
+    
+    console.log(`Uploading ${type} file:`, file.name, file.size, file.type);
+    
+    const response = await fetch(`${API_BASE}/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Upload failed:', errorData);
+      throw new Error(errorData.error || `Failed to upload ${type}`);
+    }
+    
+    const data = await response.json();
+    console.log('Upload successful:', data);
+    return data.url;
+  }
+};
 
 export function AddMedicationForm({ onMedicationAdded }: AddMedicationFormProps) {
   const { user } = useAuth();
@@ -19,6 +97,9 @@ export function AddMedicationForm({ onMedicationAdded }: AddMedicationFormProps)
     morningDose: false,
     afternoonDose: false,
     nightDose: false,
+    morningTime: '08:00',
+    afternoonTime: '14:00',
+    nightTime: '20:00',
     instructions: '',
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -58,33 +139,102 @@ export function AddMedicationForm({ onMedicationAdded }: AddMedicationFormProps)
         return;
       }
 
-      // For now, skip file upload and use null/placeholder
+      // Upload files if provided
       let imageUrl = null;
       let audioUrl = null;
 
+      if (imageFile) {
+        try {
+          console.log('Uploading image file:', imageFile.name);
+          imageUrl = await uploadFile(imageFile, 'image');
+          console.log('Image uploaded successfully:', imageUrl);
+        } catch (error) {
+          console.error('Image upload failed:', error);
+          setError('Failed to upload image. Please try again.');
+          setLoading(false);
+          return;
+        }
+      }
+      
+      if (audioFile) {
+        try {
+          console.log('Uploading audio file:', audioFile.name);
+          audioUrl = await uploadFile(audioFile, 'audio');
+          console.log('Audio uploaded successfully:', audioUrl);
+        } catch (error) {
+          console.error('Audio upload failed:', error);
+          // Continue without audio if upload fails
+        }
+      }
+
+      // Only set imageUrl if an actual image was uploaded
+      // Don't create placeholder URLs automatically
+
+      console.log('💊 Creating medication with data:', {
+        patient_id: user._id,
+        name: formData.name,
+        dosage: formData.dosage,
+        image_url: imageUrl,
+        audio_url: audioUrl
+      });
+
       // Insert medication via backend
+      const medicationData = {
+        patient_id: user._id,
+        name: formData.name,
+        dosage: formData.dosage,
+        total_count: parseInt(formData.totalCount),
+        current_count: parseInt(formData.currentCount),
+        low_stock_threshold: parseInt(formData.lowStockThreshold) || 5,
+        morning_dose: formData.morningDose,
+        afternoon_dose: formData.afternoonDose,
+        night_dose: formData.nightDose,
+        morning_time: formData.morningTime,
+        afternoon_time: formData.afternoonTime,
+        night_time: formData.nightTime,
+        instructions: formData.instructions,
+        image_url: imageUrl,
+        audio_url: audioUrl,
+      };
+
+      console.log('📤 Sending medication data to backend:', medicationData);
+
       const res = await fetch(`${API_BASE}/medications`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          patient_id: user._id,
-          name: formData.name,
-          dosage: formData.dosage,
-          total_count: parseInt(formData.totalCount),
-          current_count: parseInt(formData.currentCount),
-          low_stock_threshold: parseInt(formData.lowStockThreshold) || 5,
-          morning_dose: formData.morningDose,
-          afternoon_dose: formData.afternoonDose,
-          night_dose: formData.nightDose,
-          instructions: formData.instructions,
-          image_url: imageUrl,
-          audio_url: audioUrl,
-        }),
+        headers: { 
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(medicationData),
       });
+      
+      console.log('📡 Medication creation response status:', res.status, res.statusText);
+      
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to add medication');
+        let errorData;
+        const contentType = res.headers.get('content-type');
+        
+        if (contentType && contentType.includes('application/json')) {
+          errorData = await res.json();
+        } else {
+          const errorText = await res.text();
+          errorData = { error: errorText || `HTTP ${res.status}` };
+        }
+        
+        console.error('❌ Medication creation failed:', {
+          status: res.status,
+          statusText: res.statusText,
+          error: errorData
+        });
+        throw new Error(errorData.error || `Failed to add medication (${res.status})`);
       }
+      
+      const medication = await res.json();
+      console.log('✅ Medication created successfully:', medication);
+      
+      // Create daily reminders for this medication (non-blocking)
+      createDailyReminders(medication).catch(error => {
+        console.warn('Failed to create reminders, but medication was saved successfully:', error);
+      });
 
       // Reset form
       setFormData({
@@ -96,12 +246,16 @@ export function AddMedicationForm({ onMedicationAdded }: AddMedicationFormProps)
         morningDose: false,
         afternoonDose: false,
         nightDose: false,
+        morningTime: '08:00',
+        afternoonTime: '14:00',
+        nightTime: '20:00',
         instructions: '',
       });
       setImageFile(null);
       setAudioFile(null);
       onMedicationAdded();
     } catch (err: any) {
+      console.error('Error adding medication:', err);
       setError(err.message || 'An error occurred');
     } finally {
       setLoading(false);
@@ -223,41 +377,93 @@ export function AddMedicationForm({ onMedicationAdded }: AddMedicationFormProps)
 
         {/* Schedule */}
         <div className="bg-gray-50 rounded-xl p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Dose Schedule *</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Dose Schedule & Reminder Times *</h3>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <label className="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors duration-200">
-              <input
-                type="checkbox"
-                name="morningDose"
-                checked={formData.morningDose}
-                onChange={handleInputChange}
-                className="h-5 w-5 text-blue-600 rounded mr-3"
-              />
-              <span className="text-lg font-medium">Morning</span>
-            </label>
-
-            <label className="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors duration-200">
-              <input
-                type="checkbox"
-                name="afternoonDose"
-                checked={formData.afternoonDose}
-                onChange={handleInputChange}
-                className="h-5 w-5 text-blue-600 rounded mr-3"
-              />
-              <span className="text-lg font-medium">Afternoon</span>
-            </label>
-
-            <label className="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors duration-200">
-              <input
-                type="checkbox"
-                name="nightDose"
-                checked={formData.nightDose}
-                onChange={handleInputChange}
-                className="h-5 w-5 text-blue-600 rounded mr-3"
-              />
-              <span className="text-lg font-medium">Night</span>
-            </label>
+          <div className="space-y-4">
+            {/* Morning */}
+            <div className="border border-gray-300 rounded-lg p-4">
+              <label className="flex items-center mb-3">
+                <input
+                  type="checkbox"
+                  name="morningDose"
+                  checked={formData.morningDose}
+                  onChange={handleInputChange}
+                  className="h-5 w-5 text-blue-600 rounded mr-3"
+                />
+                <span className="text-lg font-medium">Morning Dose</span>
+              </label>
+              {formData.morningDose && (
+                <div className="ml-8">
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Reminder Time:</label>
+                  <input
+                    type="time"
+                    name="morningTime"
+                    value={formData.morningTime}
+                    onChange={handleInputChange}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              )}
+            </div>
+            
+            {/* Afternoon */}
+            <div className="border border-gray-300 rounded-lg p-4">
+              <label className="flex items-center mb-3">
+                <input
+                  type="checkbox"
+                  name="afternoonDose"
+                  checked={formData.afternoonDose}
+                  onChange={handleInputChange}
+                  className="h-5 w-5 text-blue-600 rounded mr-3"
+                />
+                <span className="text-lg font-medium">Afternoon Dose</span>
+              </label>
+              {formData.afternoonDose && (
+                <div className="ml-8">
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Reminder Time:</label>
+                  <input
+                    type="time"
+                    name="afternoonTime"
+                    value={formData.afternoonTime}
+                    onChange={handleInputChange}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              )}
+            </div>
+            
+            {/* Night */}
+            <div className="border border-gray-300 rounded-lg p-4">
+              <label className="flex items-center mb-3">
+                <input
+                  type="checkbox"
+                  name="nightDose"
+                  checked={formData.nightDose}
+                  onChange={handleInputChange}
+                  className="h-5 w-5 text-blue-600 rounded mr-3"
+                />
+                <span className="text-lg font-medium">Night Dose</span>
+              </label>
+              {formData.nightDose && (
+                <div className="ml-8">
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Reminder Time:</label>
+                  <input
+                    type="time"
+                    name="nightTime"
+                    value={formData.nightTime}
+                    onChange={handleInputChange}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+            <p className="text-sm text-blue-700">
+              <strong>Note:</strong> You will receive audio notifications at the specified times. 
+              Make sure to allow browser notifications for this website.
+            </p>
           </div>
         </div>
 
@@ -341,3 +547,48 @@ export function AddMedicationForm({ onMedicationAdded }: AddMedicationFormProps)
     </div>
   );
 }
+
+const createDailyReminders = async (medication: any) => {
+  // Function to create reminders for each dose time
+  const reminderPromises = [];
+
+  if (medication.morning_dose) {
+    reminderPromises.push(apiClient.reminders.create({
+      medication_id: medication._id,
+      patient_id: medication.patient_id,
+      reminder_time: getReminderTime(medication.morning_time),
+      acknowledged: false,
+      escalated: false,
+    }));
+  }
+
+  if (medication.afternoon_dose) {
+    reminderPromises.push(apiClient.reminders.create({
+      medication_id: medication._id,
+      patient_id: medication.patient_id,
+      reminder_time: getReminderTime(medication.afternoon_time),
+      acknowledged: false,
+      escalated: false,
+    }));
+  }
+
+  if (medication.night_dose) {
+    reminderPromises.push(apiClient.reminders.create({
+      medication_id: medication._id,
+      patient_id: medication.patient_id,
+      reminder_time: getReminderTime(medication.night_time),
+      acknowledged: false,
+      escalated: false,
+    }));
+  }
+
+  // Wait for all reminders to be created
+  await Promise.all(reminderPromises);
+};
+
+const getReminderTime = (time: string) => {
+  const today = new Date();
+  const [hours, minutes] = time.split(':').map(Number);
+  today.setHours(hours, minutes, 0, 0);
+  return today.toISOString();
+};

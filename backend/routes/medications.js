@@ -10,7 +10,17 @@ router.get('/', async (req, res) => {
     const { patient_id } = req.query;
     if (!patient_id) return res.status(400).json({ error: 'patient_id required' });
     const meds = await db.collection('medications').find({ patient_id }).toArray();
-    res.json(meds);
+    
+    // Ensure proper image URLs for the frontend
+    const medsWithImageUrls = meds.map(med => {
+      if (med.image_url && !med.image_url.startsWith('http')) {
+        // Convert relative paths to full URLs
+        med.image_url = `${req.protocol}://${req.get('host')}${med.image_url.startsWith('/') ? '' : '/'}${med.image_url}`;
+      }
+      return med;
+    });
+    
+    res.json(medsWithImageUrls);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

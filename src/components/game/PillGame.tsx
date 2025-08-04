@@ -17,6 +17,7 @@ export function PillGame({ medications }: PillGameProps) {
   const [questions, setQuestions] = useState<any[]>([]);
   const [showResult, setShowResult] = useState(false);
   const [bestScore, setBestScore] = useState(0);
+  const [imageLoadError, setImageLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -37,17 +38,79 @@ export function PillGame({ medications }: PillGameProps) {
   };
 
   const generateQuestions = () => {
-    if (medications.length < 2) return [];
+    console.log('Total medications passed to game:', medications.length);
+    console.log('Medications data:', medications);
+    
+    if (medications.length < 2) {
+      console.log('Not enough medications total. Need at least 2, have:', medications.length);
+      return [];
+    }
+
+    // Filter medications that have any image URL (including placeholders for now)
+    // We'll improve this to prioritize real uploaded images but allow placeholders if needed
+    const medicationsWithImages = medications.filter(med => {
+      const hasImage = med.image_url && med.image_url.trim() !== '';
+      console.log(`Medication ${med.name}: has image = ${hasImage}, image_url = ${med.image_url}`);
+      return hasImage;
+    });
+
+    console.log('Medications with images:', medicationsWithImages.length);
+    console.log('Image URLs:', medicationsWithImages.map(m => ({ name: m.name, url: m.image_url })));
+
+    if (medicationsWithImages.length < 2) {
+      console.log('Not enough medications with images for game. Need at least 2, have:', medicationsWithImages.length);
+      // Generate placeholder images for medications without them
+      const medicationsWithPlaceholders = medications.map(med => {
+        if (!med.image_url || med.image_url.trim() === '') {
+          return {
+            ...med,
+            image_url: `https://via.placeholder.com/200x200/4F46E5/FFFFFF?text=${encodeURIComponent(med.name || 'Pill')}`
+          };
+        }
+        return med;
+      });
+      
+      console.log('Using medications with placeholders:', medicationsWithPlaceholders.length);
+      if (medicationsWithPlaceholders.length < 2) {
+        return [];
+      }
+      
+      // Use medications with placeholders instead
+      const gameQuestions = [];
+      const questionCount = Math.min(5, medicationsWithPlaceholders.length);
+      const maxWrongAnswers = Math.min(3, medicationsWithPlaceholders.length - 1);
+
+      for (let i = 0; i < questionCount; i++) {
+        const correctMed = medicationsWithPlaceholders[i];
+        const otherMeds = medicationsWithPlaceholders.filter(med => (med._id || med.id) !== (correctMed._id || correctMed.id));
+        const wrongAnswers = otherMeds
+          .sort(() => 0.5 - Math.random())
+          .slice(0, maxWrongAnswers)
+          .map(med => med.name);
+
+        const answers = [correctMed.name, ...wrongAnswers]
+          .sort(() => 0.5 - Math.random());
+
+        gameQuestions.push({
+          medication: correctMed,
+          answers: answers,
+          correctAnswer: correctMed.name,
+        });
+      }
+
+      return gameQuestions;
+    }
 
     const gameQuestions = [];
-    const questionCount = Math.min(5, medications.length);
+    const questionCount = Math.min(5, medicationsWithImages.length);
+    const maxWrongAnswers = Math.min(3, medicationsWithImages.length - 1);
 
     for (let i = 0; i < questionCount; i++) {
-      const correctMed = medications[i];
-      const otherMeds = medications.filter(med => med.id !== correctMed.id);
+      const correctMed = medicationsWithImages[i];
+      const otherMeds = medicationsWithImages.filter(med => (med._id || med.id) !== (correctMed._id || correctMed.id));
       const wrongAnswers = otherMeds
         .sort(() => 0.5 - Math.random())
-        .slice(0, 2)
+        .slice(0, maxWrongAnswers)
         .map(med => med.name);
 
       const answers = [correctMed.name, ...wrongAnswers]
@@ -65,7 +128,27 @@ export function PillGame({ medications }: PillGameProps) {
 
   const startGame = () => {
     const newQuestions = generateQuestions();
-    if (newQuestions.length === 0) return;
+    console.log('Generated questions count:', newQuestions.length);
+    
+    if (newQuestions.length === 0) {
+      console.log('Cannot start game: no questions generated');
+      alert('Unable to start game. Please add more medications or check console for details.');
+      return;
+    }
+
+    // Debug: Log medications and their image URLs
+    console.log('Starting game with medications:', medications.map(med => ({
+      name: med.name,
+      id: med._id || med.id,
+      image_url: med.image_url,
+      hasImage: !!med.image_url
+    })));
+    
+    console.log('Generated questions:', newQuestions.map(q => ({
+      medication: q.medication.name,
+      image_url: q.medication.image_url,
+      answers: q.answers
+    })));
 
     setQuestions(newQuestions);
     setCurrentQuestion(0);
@@ -73,6 +156,7 @@ export function PillGame({ medications }: PillGameProps) {
     setGameState('playing');
     setShowResult(false);
     setSelectedAnswer(null);
+    setImageLoadError(null);
   };
 
   const handleAnswerSelect = (answer: string) => {
@@ -88,6 +172,7 @@ export function PillGame({ medications }: PillGameProps) {
           setCurrentQuestion(prev => prev + 1);
           setSelectedAnswer(null);
           setShowResult(false);
+          setImageLoadError(null);
         } else {
           finishGame();
         }
@@ -118,6 +203,15 @@ export function PillGame({ medications }: PillGameProps) {
     }
   };
 
+  const handleImageError = (imageUrl: string) => {
+    console.error('Failed to load image:', imageUrl);
+    setImageLoadError(`Failed to load image: ${imageUrl}`);
+  };
+
+  const handleImageLoad = () => {
+    setImageLoadError(null);
+  };
+
   if (medications.length < 2) {
     return (
       <div className="text-center py-12">
@@ -142,6 +236,17 @@ export function PillGame({ medications }: PillGameProps) {
           Test your knowledge by matching medication names to their photos. 
           This helps reinforce your medication recognition skills!
         </p>
+
+        {/* Game Instructions */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left">
+          <h4 className="font-semibold text-blue-800 mb-2">How to Play:</h4>
+          <div className="text-sm text-blue-700 space-y-1">
+            <p>• Look at the medication image shown</p>
+            <p>• Choose the correct medication name from the options</p>
+            <p>• Answer as many questions as you can</p>
+            <p>• Try to beat your best score!</p>
+          </div>
+        </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -200,13 +305,33 @@ export function PillGame({ medications }: PillGameProps) {
               Which medication is this?
             </h3>
             
-            <div className="w-64 h-64 mx-auto mb-6 bg-gray-100 rounded-xl overflow-hidden">
+            <div className="w-64 h-64 mx-auto mb-6 bg-gray-100 rounded-xl overflow-hidden relative">
               {question.medication.image_url ? (
-                <img
-                  src={question.medication.image_url}
-                  alt="Medication"
-                  className="w-full h-full object-cover"
-                />
+                <>
+                  <img
+                    src={question.medication.image_url}
+                    alt={`${question.medication.name} medication`}
+                    className="w-full h-full object-cover"
+                    onLoad={handleImageLoad}
+                    onError={() => handleImageError(question.medication.image_url)}
+                  />
+                  {/* Fallback for when image fails to load */}
+                  <div 
+                    className="w-full h-full flex items-center justify-center absolute inset-0 bg-gray-100"
+                    style={{ display: imageLoadError ? 'flex' : 'none' }}
+                  >
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                        <Gamepad2 className="h-8 w-8 text-red-600" />
+                      </div>
+                      <p className="text-red-600">Image not available</p>
+                      <p className="text-sm text-gray-500 mt-2">Medication: {question.medication.name}</p>
+                      {imageLoadError && (
+                        <p className="text-xs text-gray-400 mt-1 break-all px-2">{imageLoadError}</p>
+                      )}
+                    </div>
+                  </div>
+                </>
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
                   <div className="text-center">
@@ -214,6 +339,17 @@ export function PillGame({ medications }: PillGameProps) {
                       <Gamepad2 className="h-8 w-8 text-blue-600" />
                     </div>
                     <p className="text-gray-600">No image available</p>
+                    <p className="text-sm text-gray-500 mt-2">Medication: {question.medication.name}</p>
+                    {/* Generate a placeholder image URL for medications without images */}
+                    {question.medication.name && (
+                      <div className="mt-2">
+                        <img
+                          src={`https://via.placeholder.com/200x200/4F46E5/FFFFFF?text=${encodeURIComponent(question.medication.name)}`}
+                          alt={`${question.medication.name} placeholder`}
+                          className="w-32 h-32 mx-auto rounded-lg object-cover"
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
