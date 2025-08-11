@@ -79,28 +79,38 @@ const SpeechToTextMedication: React.FC<SpeechToTextMedicationProps> = ({
     // More comprehensive keyword matching
     const morningKeywords = [
       "morning pill", "morning medicine", "morning medication", "morning dose",
-      "took my morning", "morning meds", "morning tablet"
+      "took my morning", "morning meds", "morning tablet", "morning"
     ];
     
     const afternoonKeywords = [
       "afternoon pill", "afternoon medicine", "afternoon medication", "afternoon dose",
-      "took my afternoon", "afternoon meds", "afternoon tablet", "noon pill", "midday"
+      "took my afternoon", "afternoon meds", "afternoon tablet", "noon pill", "midday", "afternoon"
     ];
     
     const nightKeywords = [
       "night pill", "night medicine", "night medication", "night dose",
       "took my night", "night meds", "night tablet", "evening pill", "evening medicine",
-      "bedtime pill", "bedtime medicine"
+      "bedtime pill", "bedtime medicine", "night", "evening"
     ];
+
+    // Enhanced debugging
+    console.log("Checking keywords for:", speech);
+    console.log("Morning match:", morningKeywords.some(keyword => speech.includes(keyword)));
+    console.log("Afternoon match:", afternoonKeywords.some(keyword => speech.includes(keyword)));
+    console.log("Night match:", nightKeywords.some(keyword => speech.includes(keyword)));
 
     // Check for matches
     if (morningKeywords.some(keyword => speech.includes(keyword))) {
+      console.log("🌅 Detected MORNING medication");
       onMedicationTaken("morning");
     } else if (afternoonKeywords.some(keyword => speech.includes(keyword))) {
+      console.log("☀️ Detected AFTERNOON medication");
       onMedicationTaken("afternoon");
     } else if (nightKeywords.some(keyword => speech.includes(keyword))) {
+      console.log("🌙 Detected NIGHT medication");
       onMedicationTaken("night");
     } else {
+      console.log("❌ No time of day detected in:", speech);
       // If no specific time found, show helpful message
       setTimeout(() => {
         alert("I couldn't identify the time of day. Please try saying something like 'I took my morning pill' or 'I took my evening medicine'.");

@@ -191,6 +191,9 @@ export function PatientDashboard() {
     try {
       if (!user) return;
       
+      console.log(`📱 Voice logging: Attempting to mark ${timeOfDay} medication as taken`);
+      console.log(`👤 User ID: ${user._id}`);
+      
       const response = await fetch(`${API_BASE}/medications/mark-taken`, {
         method: 'POST',
         headers: {
@@ -204,15 +207,20 @@ export function PatientDashboard() {
       
       const data = await response.json();
       
+      console.log(`🔥 API Response Status: ${response.status}`);
+      console.log(`🔥 API Response Data:`, data);
+      
       if (response.ok) {
         // Show success message with details
         const medicationNames = data.medications_marked?.join(', ') || 'medication(s)';
+        console.log(`✅ SUCCESS: Marked ${medicationNames} as taken for ${timeOfDay}`);
         alert(`✅ Successfully marked ${medicationNames} as taken for ${timeOfDay}!`);
         
         // Refresh medications and reminders to reflect updated counts
         fetchMedications();
         fetchTodayReminders();
       } else {
+        console.log(`❌ API ERROR: ${data.error}`);
         throw new Error(data.error || 'Failed to mark medication as taken');
       }
     } catch (error) {
