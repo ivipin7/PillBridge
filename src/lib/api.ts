@@ -84,6 +84,22 @@ export interface MoodNotification {
   read_at?: string;
 }
 
+export interface Message {
+  _id: string;
+  sender_id: string;
+  sender_name: string;
+  sender_role: 'patient' | 'caregiver';
+  recipient_id: string;
+  recipient_name: string;
+  recipient_role: 'patient' | 'caregiver';
+  subject: string;
+  content: string;
+  read: boolean;
+  read_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // API functions
 export const apiClient = {
   // User management
@@ -227,6 +243,40 @@ export const apiClient = {
     },
     delete: async (id: string): Promise<void> => {
       await api.delete(`/mood_notifications/${id}`);
+    },
+  },
+
+  // Messages
+  messages: {
+    getByUserId: async (userId: string, unreadOnly: boolean = false): Promise<Message[]> => {
+      const params = new URLSearchParams();
+      if (unreadOnly) params.append('unread_only', 'true');
+      const response = await api.get(`/messages/${userId}?${params.toString()}`);
+      return response.data;
+    },
+    create: async (message: Omit<Message, '_id' | 'created_at' | 'updated_at'>): Promise<Message> => {
+      const response = await api.post('/messages', message);
+      return response.data;
+    },
+    markAsRead: async (id: string): Promise<Message> => {
+      const response = await api.put(`/messages/${id}/read`);
+      return response.data;
+    },
+    delete: async (id: string): Promise<void> => {
+      await api.delete(`/messages/${id}`);
+    },
+  },
+
+  // PDF Reports
+  pdfReports: {
+    downloadPatientReport: async (patientId: string): Promise<Blob> => {
+      const response = await api.get(`/pdf-reports/patient/${patientId}`, {
+        responseType: 'blob',
+        headers: {
+          'Accept': 'application/pdf',
+        },
+      });
+      return response.data;
     },
   },
 };

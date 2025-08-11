@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { apiClient } from '../../lib/api';
-import { Heart, Pill, AlertTriangle, CheckCircle } from 'lucide-react';
+import { apiClient, User } from '../../lib/api';
+import { Heart, Pill, AlertTriangle, CheckCircle, Phone, MessageCircle, Download } from 'lucide-react';
+import { PatientDetailsModal } from './PatientDetailsModal';
+import { MessageModal } from '../messaging/MessageModal';
 
 interface PatientCardProps {
-  patient: any;
+  patient: User;
 }
 
 export function PatientCard({ patient }: PatientCardProps) {
   const [medications, setMedications] = useState([]);
   const [todayReminders, setTodayReminders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showMessageModal, setShowMessageModal] = useState(false);
 
   useEffect(() => {
     fetchPatientData();
@@ -59,6 +63,14 @@ export function PatientCard({ patient }: PatientCardProps) {
   const totalReminders = todayReminders.length;
   const lowStockCount = medications.filter(med => med.current_count <= med.low_stock_threshold).length;
 
+  const handleCallNow = () => {
+    if (patient.emergency_phone) {
+      window.location.href = `tel:${patient.emergency_phone}`;
+    } else {
+      alert('No phone number available for this patient. Please check their emergency contact information.');
+    }
+  };
+
   return (
     <div className="bg-gray-50 rounded-xl p-6 border border-gray-200 hover:shadow-md transition-shadow duration-200">
       <div className="flex items-center justify-between mb-4">
@@ -104,15 +116,46 @@ export function PatientCard({ patient }: PatientCardProps) {
       </div>
 
       <div className="mt-4 pt-4 border-t border-gray-200">
-        <div className="flex space-x-2">
-          <button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-3 rounded-lg transition-colors duration-200">
+        <div className="space-y-2">
+          <button 
+            onClick={() => setShowDetailsModal(true)}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-3 rounded-lg transition-colors duration-200"
+          >
             View Details
           </button>
-          <button className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium py-2 px-3 rounded-lg transition-colors duration-200">
-            Send Message
-          </button>
+          
+          <div className="flex space-x-2">
+            <button 
+              onClick={handleCallNow}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2 px-3 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
+            >
+              <Phone className="h-4 w-4" />
+              <span>Call</span>
+            </button>
+            <button 
+              onClick={() => setShowMessageModal(true)}
+              className="flex-1 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium py-2 px-3 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
+            >
+              <MessageCircle className="h-4 w-4" />
+              <span>Message</span>
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Patient Details Modal */}
+      <PatientDetailsModal
+        patient={patient}
+        isOpen={showDetailsModal}
+        onClose={() => setShowDetailsModal(false)}
+      />
+      
+      {/* Message Modal */}
+      <MessageModal
+        isOpen={showMessageModal}
+        onClose={() => setShowMessageModal(false)}
+        recipient={patient}
+      />
     </div>
   );
 }

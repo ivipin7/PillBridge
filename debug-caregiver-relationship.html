@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Caregiver-Patient Relationships</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Debug Caregiver-Patient Relationships</h1>
+        <p>This page helps debug the caregiver-patient linking system and emergency contact functionality.</p>
+        
+        <div>
+            <button class="button" onclick="testRelationships()">📊 Check All Relationships</button>
+            <button class="button" onclick="testEmergencyEndpoint()">🚨 Test Emergency API</button>
+            <button class="button" onclick="clearResults()">🗑️ Clear Results</button>
+        </div>
+        
+        <div id="results"></div>
+    </div>
+
+    <div class="container">
+        <h2>📋 Test Patient Emergency Contact</h2>
+        <p>Enter a patient's user ID to test their emergency contact lookup:</p>
+        
+        <div>
+            <input type="text" id="patientId" placeholder="Enter Patient User ID (e.g., 507f1f77bcf86cd799439011)" style="width: 300px; padding: 8px; margin-right: 10px;">
+            <button class="button" onclick="testPatientEmergency()">🔍 Test Patient</button>
+        </div>
+        
+        <div id="patientResults"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000';
+        
+        function addResult(containerId, content, type = 'info') {
+            const container = document.getElementById(containerId);
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `result ${type}`;
+            resultDiv.textContent = content;
+            container.appendChild(resultDiv);
+        }
+        
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('patientResults').innerHTML = '';
+        }
+        
+        async function testRelationships() {
+            try {
+                addResult('results', '🔄 Fetching all user relationships...', 'info');
+                
+                const response = await fetch(`${API_BASE}/emergency/debug/relationships`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addResult('results', `✅ Relationships loaded successfully!
+📊 Summary:
+- Total Users: ${data.total_users}
+- Caregivers: ${data.caregivers}
+- Patients: ${data.patients}
+
+🔗 Patient-Caregiver Relationships:`, 'success');
+                    
+                    data.relationships.forEach((rel, index) => {
+                        const status = rel.caregiver ? '✅ Linked' : '❌ Not Linked';
+                        const caregiverInfo = rel.caregiver ? 
+                            `${rel.caregiver.name} (${rel.caregiver.email})` : 
+                            'No caregiver found';
+                        
+                        addResult('results', `${index + 1}. Patient: ${rel.patient.name}
+   📧 Email: ${rel.patient.email}
+   🔗 Linked Caregiver ID: ${rel.patient.linked_caregiver_id}
+   👨‍⚕️ Caregiver: ${caregiverInfo}
+   📊 Status: ${status}
+`, 'info');
+                    });
+                } else {
+                    addResult('results', `❌ Error: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                addResult('results', `🔥 Network Error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testEmergencyEndpoint() {
+            try {
+                addResult('results', '🔄 Testing emergency endpoint with sample patient ID...', 'info');
+                
+                // First, get relationships to find a patient ID
+                const relResponse = await fetch(`${API_BASE}/emergency/debug/relationships`);
+                const relData = await relResponse.json();
+                
+                if (relData.relationships && relData.relationships.length > 0) {
+                    const samplePatient = relData.relationships[0];
+                    const patientId = samplePatient.patient.id;
+                    
+                    addResult('results', `📋 Testing with Patient: ${samplePatient.patient.name} (ID: ${patientId})`, 'info');
+                    
+                    const emergencyResponse = await fetch(`${API_BASE}/emergency/${patientId}`);
+                    const emergencyData = await emergencyResponse.json();
+                    
+                    if (emergencyResponse.ok) {
+                        addResult('results', `✅ Emergency API Response:
+🏥 Hospital Info:
+- Name: ${emergencyData.hospital_name || 'Not set'}
+- Address: ${emergencyData.hospital_address || 'Not set'}
+- Phone: ${emergencyData.hospital_phone || 'Not set'}
+
+👨‍⚕️ Doctor Info:
+- Name: ${emergencyData.doctor_name || 'Not set'}
+- Phone: ${emergencyData.doctor_phone || 'Not set'}
+
+👨‍💼 Caregiver Info:
+- Name: ${emergencyData.caregiver?.name || 'Not found'}
+- Email: ${emergencyData.caregiver?.email || 'Not found'}
+- Phone: ${emergencyData.caregiver?.phone || 'Not found'}`, 'success');
+                    } else {
+                        addResult('results', `❌ Emergency API Error: ${emergencyData.error}`, 'error');
+                    }
+                } else {
+                    addResult('results', '❌ No patients found to test with', 'error');
+                }
+            } catch (error) {
+                addResult('results', `🔥 Network Error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testPatientEmergency() {
+            const patientId = document.getElementById('patientId').value.trim();
+            
+            if (!patientId) {
+                addResult('patientResults', '❌ Please enter a patient ID', 'error');
+                return;
+            }
+            
+            try {
+                addResult('patientResults', `🔄 Testing emergency contact for patient: ${patientId}`, 'info');
+                
+                const response = await fetch(`${API_BASE}/emergency/${patientId}`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addResult('patientResults', `✅ Emergency Contact Data:
+                    
+🚨 Emergency Contact:
+- Contact: ${data.emergency_contact || 'Not set'}
+- Phone: ${data.emergency_phone || 'Not set'}
+
+👨‍💼 Caregiver (Auto-populated):
+- Name: ${data.caregiver?.name || 'Not linked'}
+- Email: ${data.caregiver?.email || 'N/A'}
+- Phone: ${data.caregiver?.phone || 'N/A'}
+
+🏥 Hospital Information:
+- Hospital: ${data.hospital_name || 'Not set'}
+- Address: ${data.hospital_address || 'Not set'}
+- Phone: ${data.hospital_phone || 'Not set'}
+- Doctor: ${data.doctor_name || 'Not set'}
+- Doctor Phone: ${data.doctor_phone || 'Not set'}`, 'success');
+                } else {
+                    addResult('patientResults', `❌ Error: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                addResult('patientResults', `🔥 Network Error: ${error.message}
+                
+Make sure:
+1. The backend server is running on port 3000
+2. The patient ID is valid
+3. The patient exists in the database`, 'error');
+            }
+        }
+        
+        // Auto-load relationships when page loads
+        window.addEventListener('load', () => {
+            setTimeout(testRelationships, 1000);
+        });
+    </script>
+</body>
+</html>

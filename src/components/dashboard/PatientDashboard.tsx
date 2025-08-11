@@ -2,12 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { MedicationList } from '../medications/MedicationList';
 import { AddMedicationForm } from '../medications/AddMedicationForm';
+import SpeechToTextMedication from '../medications/SpeechToTextMedication';
 import { MoodTracker } from '../health/MoodTracker';
 import { PillGame } from '../game/PillGame';
 import { EmergencyInfo } from '../emergency/EmergencyInfo';
-import { Pill as Pills, Plus, Heart, Gamepad2, Phone, Calendar } from 'lucide-react';
+import { Messages } from '../messaging/Messages';
+import { MessageSidebar } from '../messaging/MessageSidebar';
+import { Pill as Pills, Plus, Heart, Gamepad2, Phone, Calendar, Mail } from 'lucide-react';
 import { createReminder, updateReminder, deleteReminder } from '../../utils/remindersApi';
 import { notificationManager } from '../../utils/notifications';
+import { apiClient } from '../../lib/api';
 
 const API_BASE = 'http://localhost:3000';
 
@@ -19,6 +23,7 @@ export function PatientDashboard() {
   const [loading, setLoading] = useState(true);
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [editingReminder, setEditingReminder] = useState<any>(null);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const [reminderForm, setReminderForm] = useState({
     medication_id: '',
     patient_id: user?._id || '',
@@ -26,14 +31,36 @@ export function PatientDashboard() {
     acknowledged: false,
     escalated: false,
   });
+  
+  // Request deduplication flags
+  const [isFetchingMedications, setIsFetchingMedications] = useState(false);
+  const [isFetchingReminders, setIsFetchingReminders] = useState(false);
+  const [isFetchingMessages, setIsFetchingMessages] = useState(false);
+  
+  // Cache timestamps to prevent unnecessary API calls
+  const [lastFetchTime, setLastFetchTime] = useState({
+    medications: 0,
+    reminders: 0,
+    messages: 0
+  });
+  
+  const CACHE_DURATION = 30000; // 30 seconds cache duration
 
   useEffect(() => {
     if (user) {
       fetchMedications();
       fetchTodayReminders(); // Enable fetching today's reminders
+      fetchUnreadMessageCount(); // Fetch unread message count
       
       // Request notification permissions
       requestNotificationPermissions();
+      
+      // Set up periodic refresh for unread message count (every 2 minutes instead of 30 seconds)
+      const messageCountInterval = setInterval(() => {
+        fetchUnreadMessageCount();
+      }, 120000); // 2 minutes
+      
+      return () => clearInterval(messageCountInterval);
     }
   }, [user]);
   
@@ -57,28 +84,69 @@ export function PatientDashboard() {
     }
   };
 
-  const fetchMedications = async () => {
+  const fetchUnreadMessageCount = async () => {
+    if (isFetchingMessages) return; // Prevent duplicate requests
+    
+    const now = Date.now();
+    if (now - lastFetchTime.messages < CACHE_DURATION) {
+      return; // Use cached data
+    }
+    
     try {
+      if (!user) return;
+      setIsFetchingMessages(true);
+      const messages = await apiClient.messages.getByUserId(user._id, true); // Get only unread messages
+      setUnreadMessageCount(messages.length);
+      setLastFetchTime(prev => ({ ...prev, messages: now }));
+    } catch (error) {
+      console.error('Error fetching unread message count:', error);
+    } finally {
+      setIsFetchingMessages(false);
+    }
+  };
+
+  const fetchMedications = async () => {
+    if (isFetchingMedications) return; // Prevent duplicate requests
+    
+    const now = Date.now();
+    if (now - lastFetchTime.medications < CACHE_DURATION) {
+      return; // Use cached data
+    }
+    
+    try {
+      setIsFetchingMedications(true);
       const res = await fetch(`${API_BASE}/medications?patient_id=${user._id}`);
       const data = await res.json();
       setMedications(data || []);
+      setLastFetchTime(prev => ({ ...prev, medications: now }));
     } catch (error) {
       console.error('Error fetching medications:', error);
     } finally {
       setLoading(false);
+      setIsFetchingMedications(false);
     }
   };
 
   const fetchTodayReminders = async () => {
+    if (isFetchingReminders) return; // Prevent duplicate requests
+    
+    const now = Date.now();
+    if (now - lastFetchTime.reminders < CACHE_DURATION) {
+      return; // Use cached data
+    }
+    
     try {
+      setIsFetchingReminders(true);
       const today = new Date().toISOString().split('T')[0];
       const res = await fetch(`${API_BASE}/reminders?patient_id=${user._id}&date=${today}`);
       const data = await res.json();
       setReminders(data || []);
+      setLastFetchTime(prev => ({ ...prev, reminders: now }));
     } catch (error) {
       console.error('Error fetching reminders:', error);
     } finally {
       setLoading(false);
+      setIsFetchingReminders(false);
     }
   };
 
@@ -119,6 +187,123 @@ export function PatientDashboard() {
     }
   };
 
+  const handleMedicationTaken = async (timeOfDay: "morning" | "afternoon" | "night") => {
+    try {
+      if (!user) return;
+      
+      const response = await fetch(`${API_BASE}/medications/mark-taken`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          patient_id: user._id,
+          timeOfDay
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        // Show success message with details
+        const medicationNames = data.medications_marked?.join(', ') || 'medication(s)';
+        alert(`✅ Successfully marked ${medicationNames} as taken for ${timeOfDay}!`);
+        
+        // Refresh medications and reminders to reflect updated counts
+        fetchMedications();
+        fetchTodayReminders();
+      } else {
+        throw new Error(data.error || 'Failed to mark medication as taken');
+      }
+    } catch (error) {
+      console.error('Error marking medication as taken:', error);
+      alert(`❌ Failed to mark medication as taken: ${error.message}`);
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    try {
+      if (!user) return;
+      
+      // Show loading state
+      const button = document.querySelector('button[onclick="handleDownloadPDF"]');
+      if (button) {
+        button.disabled = true;
+        button.innerHTML = '<div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white mx-auto"></div><span class="ml-2">Generating...</span>';
+      }
+      
+      // Download PDF using the API client
+      const response = await fetch(`${API_BASE}/pdf-reports/patient/${user._id}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/pdf, text/html',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const contentType = response.headers.get('content-type');
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      
+      if (contentType && contentType.includes('application/pdf')) {
+        // PDF file
+        a.download = `health-report-${user.full_name.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`;
+        console.log('PDF downloaded successfully');
+      } else if (contentType && contentType.includes('text/html')) {
+        // HTML file (fallback)
+        a.download = `health-report-${user.full_name.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.html`;
+        console.log('HTML report downloaded (PDF generation failed)');
+        alert('PDF generation failed, but HTML report was downloaded. You can open this in your browser and print it as PDF.');
+      } else {
+        // Unknown type
+        a.download = `health-report-${user.full_name.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.file`;
+        console.log('Unknown file type downloaded');
+      }
+      
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      // Reset button state
+      if (button) {
+        button.disabled = false;
+        button.innerHTML = '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg><span class="ml-2">Download Report</span>';
+      }
+      
+    } catch (error) {
+      console.error('Error downloading report:', error);
+      
+      // Try to get more detailed error information
+      try {
+        const errorResponse = await fetch(`${API_BASE}/pdf-reports/patient/${user._id}`);
+        if (errorResponse.status === 500) {
+          const errorData = await errorResponse.json();
+          console.error('Server error details:', errorData);
+          alert(`Failed to generate report: ${errorData.error || 'Unknown error'}. Please try again later.`);
+        } else {
+          alert(`Failed to download report: ${error.message}. Please try again.`);
+        }
+      } catch (fetchError) {
+        alert(`Failed to download report: ${error.message}. Please try again.`);
+      }
+      
+      // Reset button state on error
+      const button = document.querySelector('button[onclick="handleDownloadPDF"]');
+      if (button) {
+        button.disabled = false;
+        button.innerHTML = '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg><span class="ml-2">Download Report</span>';
+      }
+    }
+  };
+
   const tabs = [
     { id: 'medications', label: 'My Medications', icon: Pills },
     { id: 'add-medication', label: 'Add Medication', icon: Plus },
@@ -126,6 +311,7 @@ export function PatientDashboard() {
     { id: 'game', label: 'Pill Game', icon: Gamepad2 },
     { id: 'emergency', label: 'Emergency', icon: Phone },
     { id: 'reminders', label: 'Reminders', icon: Calendar },
+    { id: 'messages', label: 'Messages', icon: Mail },
   ];
 
   if (loading) {
@@ -137,7 +323,7 @@ export function PatientDashboard() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="p-4 lg:p-8 bg-gray-50 min-h-screen space-y-6 lg:space-y-8">
       {/* Notification Banner */}
       <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
         <div className="flex items-center">
@@ -160,66 +346,89 @@ export function PatientDashboard() {
         </div>
       </div>
       
-      <div className="bg-white rounded-2xl shadow-lg p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              Welcome back, {user?.full_name}!
-            </h1>
-            <p className="text-lg text-gray-600 mt-1">
-              Today is {new Date().toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}
-            </p>
+      {/* Welcome Section with Message Sidebar */}
+      <div className="flex space-x-6">
+        {/* Welcome Box */}
+        <div className="flex-1 bg-white rounded-2xl shadow-lg p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                Welcome back, {user?.full_name}!
+              </h1>
+              <p className="text-lg text-gray-600 mt-1">
+                Today is {new Date().toLocaleDateString('en-US', { 
+                  weekday: 'long', 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric' 
+                })}
+              </p>
+            </div>
+            <div className="flex items-center space-x-4">
+              {/* PDF Download Button */}
+              <button
+                onClick={handleDownloadPDF}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors duration-200"
+                title="Download your health report as PDF"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span>Download Report</span>
+              </button>
+              
+              <div className="text-right">
+                <div className="bg-blue-50 rounded-xl p-4">
+                  <p className="text-sm text-blue-600 font-medium">Today's Reminders</p>
+                  <p className="text-2xl font-bold text-blue-700">{reminders.length}</p>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="text-right">
-            <div className="bg-blue-50 rounded-xl p-4">
-              <p className="text-sm text-blue-600 font-medium">Today's Reminders</p>
-              <p className="text-2xl font-bold text-blue-700">{reminders.length}</p>
+
+          {/* Quick Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="bg-green-50 rounded-xl p-4">
+              <div className="flex items-center">
+                <Pills className="h-8 w-8 text-green-600 mr-3" />
+                <div>
+                  <p className="text-sm text-green-600 font-medium">Active Medications</p>
+                  <p className="text-xl font-bold text-green-700">{medications.length}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-yellow-50 rounded-xl p-4">
+              <div className="flex items-center">
+                <Calendar className="h-8 w-8 text-yellow-600 mr-3" />
+                <div>
+                  <p className="text-sm text-yellow-600 font-medium">Low Stock Items</p>
+                  <p className="text-xl font-bold text-yellow-700">
+                    {medications.filter(med => med.current_count <= med.low_stock_threshold).length}
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-purple-50 rounded-xl p-4">
+              <div className="flex items-center">
+                <Heart className="h-8 w-8 text-purple-600 mr-3" />
+                <div>
+                  <p className="text-sm text-purple-600 font-medium">Mood Today</p>
+                  <p className="text-xl font-bold text-purple-700">Track Now</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-green-50 rounded-xl p-4">
-            <div className="flex items-center">
-              <Pills className="h-8 w-8 text-green-600 mr-3" />
-              <div>
-                <p className="text-sm text-green-600 font-medium">Active Medications</p>
-                <p className="text-xl font-bold text-green-700">{medications.length}</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-yellow-50 rounded-xl p-4">
-            <div className="flex items-center">
-              <Calendar className="h-8 w-8 text-yellow-600 mr-3" />
-              <div>
-                <p className="text-sm text-yellow-600 font-medium">Low Stock Items</p>
-                <p className="text-xl font-bold text-yellow-700">
-                  {medications.filter(med => med.current_count <= med.low_stock_threshold).length}
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-purple-50 rounded-xl p-4">
-            <div className="flex items-center">
-              <Heart className="h-8 w-8 text-purple-600 mr-3" />
-              <div>
-                <p className="text-sm text-purple-600 font-medium">Mood Today</p>
-                <p className="text-xl font-bold text-purple-700">Track Now</p>
-              </div>
-            </div>
-          </div>
+        {/* Message Sidebar - Same height as welcome box */}
+        <div className="hidden lg:block w-80 xl:w-80 flex-shrink-0">
+          <MessageSidebar onUnreadCountChange={fetchUnreadMessageCount} />
         </div>
       </div>
 
-      {/* Navigation Tabs */}
+      {/* Navigation Tabs - Full width */}
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
         <div className="border-b border-gray-200">
           <nav className="flex overflow-x-auto">
@@ -228,8 +437,14 @@ export function PatientDashboard() {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center space-x-3 px-6 py-4 text-lg font-medium whitespace-nowrap transition-colors duration-200 ${
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    // Refresh unread count when switching to messages tab
+                    if (tab.id === 'messages') {
+                      fetchUnreadMessageCount();
+                    }
+                  }}
+                  className={`flex items-center space-x-3 px-6 py-4 text-lg font-medium whitespace-nowrap transition-colors duration-200 relative ${
                     activeTab === tab.id
                       ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
@@ -237,6 +452,11 @@ export function PatientDashboard() {
                 >
                   <Icon className="h-6 w-6" />
                   <span>{tab.label}</span>
+                  {tab.id === 'messages' && unreadMessageCount > 0 && (
+                    <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center min-w-[20px]">
+                      {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
+                    </div>
+                  )}
                 </button>
               );
             })}
@@ -245,10 +465,16 @@ export function PatientDashboard() {
 
         <div className="p-6">
           {activeTab === 'medications' && (
-            <MedicationList 
-              medications={medications} 
-              onMedicationUpdate={fetchMedications}
-            />
+            <div className="space-y-6">
+              {/* Voice Medication Logging */}
+              <SpeechToTextMedication onMedicationTaken={handleMedicationTaken} />
+              
+              {/* Regular Medication List */}
+              <MedicationList 
+                medications={medications} 
+                onMedicationUpdate={fetchMedications}
+              />
+            </div>
           )}
           {activeTab === 'add-medication' && (
             <AddMedicationForm onMedicationAdded={fetchMedications} />
@@ -256,6 +482,7 @@ export function PatientDashboard() {
           {activeTab === 'mood' && <MoodTracker />}
           {activeTab === 'game' && <PillGame medications={medications} />}
           {activeTab === 'emergency' && <EmergencyInfo />}
+          {activeTab === 'messages' && <Messages onUnreadCountChange={fetchUnreadMessageCount} />}
           {activeTab === 'reminders' && (
             <div>
               <div className="flex justify-between items-center mb-4">

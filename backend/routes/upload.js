@@ -72,9 +72,14 @@ router.post('/', upload.single('file'), (req, res) => {
       } : null
     });
 
+    // Check if file type is specified
+    if (!req.body.type) {
+      return res.status(400).json({ error: 'File type is required. Please specify "image" or "audio"' });
+    }
+
     if (!req.file) {
       console.error('No file uploaded');
-      return res.status(400).json({ error: 'No file uploaded' });
+      return res.status(400).json({ error: 'No file uploaded. Please select a file to upload.' });
     }
 
     const type = req.body.type;
@@ -104,12 +109,27 @@ router.post('/', upload.single('file'), (req, res) => {
 // Error handling middleware for multer
 router.use((error, req, res, next) => {
   console.error('Upload middleware error:', error);
+  
   if (error instanceof multer.MulterError) {
-    if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ error: 'File too large. Maximum size is 10MB.' });
+    switch (error.code) {
+      case 'LIMIT_FILE_SIZE':
+        return res.status(400).json({ error: 'File too large. Maximum size is 10MB.' });
+      case 'LIMIT_FILE_COUNT':
+        return res.status(400).json({ error: 'Too many files. Only one file allowed.' });
+      case 'LIMIT_UNEXPECTED_FILE':
+        return res.status(400).json({ error: 'Unexpected file field.' });
+      default:
+        return res.status(400).json({ error: `Upload error: ${error.message}` });
     }
   }
-  res.status(400).json({ error: error.message || 'Upload failed' });
+  
+  // Handle custom validation errors
+  if (error.message) {
+    return res.status(400).json({ error: error.message });
+  }
+  
+  res.status(400).json({ error: 'Upload failed. Please try again.' });
 });
 
 module.exports = router;
+
