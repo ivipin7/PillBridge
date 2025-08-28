@@ -63,6 +63,28 @@ export function PatientDashboard() {
       return () => clearInterval(messageCountInterval);
     }
   }, [user]);
+
+  // Effect to unlock audio context on first user interaction
+  useEffect(() => {
+    const unlockAudio = () => {
+      console.log('User interaction detected, attempting to unlock audio.');
+      notificationManager.unlockAudio();
+      // Remove listeners after the first interaction
+      document.removeEventListener('click', unlockAudio);
+      document.removeEventListener('touchstart', unlockAudio);
+      document.removeEventListener('keydown', unlockAudio);
+    };
+
+    document.addEventListener('click', unlockAudio);
+    document.addEventListener('touchstart', unlockAudio);
+    document.addEventListener('keydown', unlockAudio);
+
+    return () => {
+      document.removeEventListener('click', unlockAudio);
+      document.removeEventListener('touchstart', unlockAudio);
+      document.removeEventListener('keydown', unlockAudio);
+    };
+  }, []); // Empty dependency array ensures this runs only once
   
   // Schedule reminders when medications are updated
   useEffect(() => {
