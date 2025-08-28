@@ -24,6 +24,7 @@ export function PatientDashboard() {
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [editingReminder, setEditingReminder] = useState<any>(null);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  const [showAudioPrompt, setShowAudioPrompt] = useState(false);
   const [reminderForm, setReminderForm] = useState({
     medication_id: '',
     patient_id: user?._id || '',
@@ -64,27 +65,16 @@ export function PatientDashboard() {
     }
   }, [user]);
 
-  // Effect to unlock audio context on first user interaction
+  // Effect to check if audio needs to be unlocked by the user
   useEffect(() => {
-    const unlockAudio = () => {
-      console.log('User interaction detected, attempting to unlock audio.');
-      notificationManager.unlockAudio();
-      // Remove listeners after the first interaction
-      document.removeEventListener('click', unlockAudio);
-      document.removeEventListener('touchstart', unlockAudio);
-      document.removeEventListener('keydown', unlockAudio);
-    };
-
-    document.addEventListener('click', unlockAudio);
-    document.addEventListener('touchstart', unlockAudio);
-    document.addEventListener('keydown', unlockAudio);
-
-    return () => {
-      document.removeEventListener('click', unlockAudio);
-      document.removeEventListener('touchstart', unlockAudio);
-      document.removeEventListener('keydown', unlockAudio);
-    };
-  }, []); // Empty dependency array ensures this runs only once
+    // Use a small timeout to ensure NotificationManager has initialized
+    const timer = setTimeout(() => {
+      if (!notificationManager.isAudioReady()) {
+        setShowAudioPrompt(true);
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, []);
   
   // Schedule reminders when medications are updated
   useEffect(() => {
@@ -92,6 +82,12 @@ export function PatientDashboard() {
       notificationManager.scheduleReminders(medications);
     }
   }, [medications]);
+
+  const handleUnlockAudio = () => {
+    notificationManager.unlockAudio(() => {
+      setShowAudioPrompt(false);
+    });
+  };
   
   const requestNotificationPermissions = async () => {
     try {
@@ -354,6 +350,24 @@ export function PatientDashboard() {
 
   return (
     <div className="p-4 lg:p-8 bg-gray-50 min-h-screen space-y-6 lg:space-y-8">
+      {/* Audio Unlock Prompt */}
+      {showAudioPrompt && (
+        <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-lg shadow-md" role="alert">
+          <div className="flex items-center">
+            <div className="py-1"><svg className="fill-current h-6 w-6 text-yellow-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9 9a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1zm1-4a1 1 0 100 2 1 1 0 000-2z"/></svg></div>
+            <div className="flex-grow">
+              <p className="font-bold">Enable Audio Reminders</p>
+              <p className="text-sm">To hear your custom reminder sounds, please enable audio by clicking the button.</p>
+            </div>
+            <div className="ml-auto pl-3">
+              <button onClick={handleUnlockAudio} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200">
+                Enable Audio
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Notification Banner */}
       <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
         <div className="flex items-center">

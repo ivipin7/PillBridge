@@ -82,8 +82,11 @@ export class NotificationManager {
    * Attempts to resume the AudioContext. This should be called from a user-initiated event
    * (e.g., a click handler) to comply with browser autoplay policies.
    */
-  public async unlockAudio(): Promise<void> {
+  public async unlockAudio(onUnlock?: () => void): Promise<void> {
     if (this.isAudioUnlocked || !this.audioContext) {
+      if (this.isAudioUnlocked) {
+        onUnlock?.();
+      }
       return;
     }
     if (this.audioContext.state === 'suspended') {
@@ -92,6 +95,7 @@ export class NotificationManager {
         this.isAudioUnlocked = this.audioContext.state === 'running';
         if (this.isAudioUnlocked) {
           console.log('AudioContext unlocked successfully.');
+          onUnlock?.();
         } else {
           console.warn('AudioContext unlock failed, state is:', this.audioContext.state);
         }
@@ -101,7 +105,12 @@ export class NotificationManager {
     } else {
       this.isAudioUnlocked = true;
       console.log('AudioContext was already running.');
+      onUnlock?.();
     }
+  }
+
+  public isAudioReady(): boolean {
+    return this.isAudioUnlocked;
   }
 
   showMedicationReminder(medicationName: string, dosage: string, audioUrl?: string): void {
