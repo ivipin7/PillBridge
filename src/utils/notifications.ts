@@ -198,35 +198,22 @@ export class NotificationManager {
   }
 
   private playDefaultNotificationSound(): void {
-    if (!this.audioContext) {
-      console.warn('Cannot play default sound, AudioContext not available.');
-      return;
-    }
-
-    // Attempt to resume context just in case it's suspended.
-    // This might not work if not called from a user gesture, but it's worth a try.
-    if (this.audioContext.state === 'suspended') {
-        this.audioContext.resume();
-    }
-
-    try {
-      // Create a simple audio notification tone using the shared AudioContext
-      const oscillator = this.audioContext.createOscillator();
-      const gainNode = this.audioContext.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(this.audioContext.destination);
-      
-      oscillator.frequency.value = 800; // 800Hz tone
-      oscillator.type = 'sine';
-      
-      gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.5);
-      
-      oscillator.start(this.audioContext.currentTime);
-      oscillator.stop(this.audioContext.currentTime + 0.5);
-    } catch (error) {
-      console.warn('Could not create default audio notification:', error);
+    // This is a fallback for when the main AudioContext is not available or not unlocked.
+    // We use SpeechSynthesis as it often has different, more lenient autoplay policies.
+    if ('speechSynthesis' in window) {
+      try {
+        // Cancel any previous utterances to prevent them from queueing up.
+        speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance('Medication reminder');
+        utterance.volume = 0.7;
+        utterance.rate = 1.1;
+        speechSynthesis.speak(utterance);
+      } catch (speechError) {
+        console.error('Speech synthesis fallback failed:', speechError);
+      }
+    } else {
+        // As a last resort, if even speech synthesis is not available, we can't make a sound.
+        console.warn('Could not play any default sound. Speech synthesis is not supported.');
     }
   }
 
