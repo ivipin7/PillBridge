@@ -34,13 +34,17 @@ router.post('/register', async (req, res) => {
       passwordHash,
       full_name,
       role,
-      caregiver_code: caregiverCode,
       linked_caregiver_id: linkedCaregiverId,
       emergency_contact,
       emergency_phone,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
+    
+    // Only add caregiver_code if it's not null (i.e., for caregivers)
+    if (caregiverCode !== null) {
+      userDoc.caregiver_code = caregiverCode;
+    }
     const result = await db.collection('users').insertOne(userDoc);
     userDoc._id = result.insertedId;
     res.json({ user: userDoc });
