@@ -12,10 +12,12 @@ import { Pill as Pills, Plus, Heart, Gamepad2, Phone, Calendar, Mail } from 'luc
 import { createReminder, updateReminder, deleteReminder } from '../../utils/remindersApi';
 import { notificationManager } from '../../utils/notifications';
 import { apiClient } from '../../lib/api';
+import { useTranslation } from 'react-i18next';
 
 const API_BASE = 'http://localhost:3000';
 
 export function PatientDashboard() {
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('medications');
   const [medications, setMedications] = useState([]);
@@ -24,7 +26,6 @@ export function PatientDashboard() {
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [editingReminder, setEditingReminder] = useState<any>(null);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
-  const [showAudioPrompt, setShowAudioPrompt] = useState(false);
   const [reminderForm, setReminderForm] = useState({
     medication_id: '',
     patient_id: user?._id || '',
@@ -64,17 +65,6 @@ export function PatientDashboard() {
       return () => clearInterval(messageCountInterval);
     }
   }, [user]);
-
-  // Effect to check if audio needs to be unlocked by the user
-  useEffect(() => {
-    // Use a small timeout to ensure NotificationManager has initialized
-    const timer = setTimeout(() => {
-      if (!notificationManager.isAudioReady()) {
-        setShowAudioPrompt(true);
-      }
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, []);
   
   // Schedule reminders when medications are updated
   useEffect(() => {
@@ -82,12 +72,6 @@ export function PatientDashboard() {
       notificationManager.scheduleReminders(medications);
     }
   }, [medications]);
-
-  const handleUnlockAudio = () => {
-    notificationManager.unlockAudio(() => {
-      setShowAudioPrompt(false);
-    });
-  };
   
   const requestNotificationPermissions = async () => {
     try {
@@ -192,16 +176,16 @@ export function PatientDashboard() {
       setShowReminderModal(false);
       fetchTodayReminders();
     } catch (err) {
-      alert('Failed to save reminder');
+      alert(t('dashboard.remindersTab.saveError'));
     }
   };
   const handleDeleteReminder = async (id: string) => {
-    if (!window.confirm('Delete this reminder?')) return;
+    if (!window.confirm(t('dashboard.remindersTab.deleteConfirm'))) return;
     try {
       await deleteReminder(id);
       fetchTodayReminders();
     } catch (err) {
-      alert('Failed to delete reminder');
+      alert(t('dashboard.remindersTab.deleteError'));
     }
   };
 
@@ -232,7 +216,7 @@ export function PatientDashboard() {
         // Show success message with details
         const medicationNames = data.medications_marked?.join(', ') || 'medication(s)';
         console.log(`✅ SUCCESS: Marked ${medicationNames} as taken for ${timeOfDay}`);
-        alert(`✅ Successfully marked ${medicationNames} as taken for ${timeOfDay}!`);
+        alert(t('dashboard.medicationTakenSuccess', { medicationNames, timeOfDay }));
         
         // Refresh medications and reminders to reflect updated counts
         fetchMedications();
@@ -243,7 +227,7 @@ export function PatientDashboard() {
       }
     } catch (error) {
       console.error('Error marking medication as taken:', error);
-      alert(`❌ Failed to mark medication as taken: ${error.message}`);
+      alert(t('dashboard.medicationTakenError', { message: error.message }));
     }
   };
 
@@ -286,7 +270,7 @@ export function PatientDashboard() {
         // HTML file (fallback)
         a.download = `health-report-${user.full_name.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.html`;
         console.log('HTML report downloaded (PDF generation failed)');
-        alert('PDF generation failed, but HTML report was downloaded. You can open this in your browser and print it as PDF.');
+        alert(t('dashboard.pdf.fallback'));
       } else {
         // Unknown type
         a.download = `health-report-${user.full_name.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.file`;
@@ -301,7 +285,7 @@ export function PatientDashboard() {
       // Reset button state
       if (button) {
         button.disabled = false;
-        button.innerHTML = '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg><span class="ml-2">Download Report</span>';
+        button.innerHTML = `<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg><span class="ml-2">${t('dashboard.actions.downloadReport')}</span>`;
       }
       
     } catch (error) {
@@ -313,31 +297,31 @@ export function PatientDashboard() {
         if (errorResponse.status === 500) {
           const errorData = await errorResponse.json();
           console.error('Server error details:', errorData);
-          alert(`Failed to generate report: ${errorData.error || 'Unknown error'}. Please try again later.`);
+          alert(t('dashboard.pdf.error', { message: errorData.error || 'Unknown error' }));
         } else {
-          alert(`Failed to download report: ${error.message}. Please try again.`);
+          alert(t('dashboard.pdf.error', { message: error.message }));
         }
       } catch (fetchError) {
-        alert(`Failed to download report: ${error.message}. Please try again.`);
+        alert(t('dashboard.pdf.error', { message: error.message }));
       }
       
       // Reset button state on error
       const button = document.querySelector('button[onclick="handleDownloadPDF"]');
       if (button) {
         button.disabled = false;
-        button.innerHTML = '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg><span class="ml-2">Download Report</span>';
+        button.innerHTML = `<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg><span class="ml-2">${t('dashboard.actions.downloadReport')}</span>`;
       }
     }
   };
 
   const tabs = [
-    { id: 'medications', label: 'My Medications', icon: Pills },
-    { id: 'add-medication', label: 'Add Medication', icon: Plus },
-    { id: 'mood', label: 'Daily Check-in', icon: Heart },
-    { id: 'game', label: 'Pill Game', icon: Gamepad2 },
-    { id: 'emergency', label: 'Emergency', icon: Phone },
-    { id: 'reminders', label: 'Reminders', icon: Calendar },
-    { id: 'messages', label: 'Messages', icon: Mail },
+    { id: 'medications', label: t('dashboard.tabs.medications'), icon: Pills },
+    { id: 'add-medication', label: t('dashboard.tabs.addMedication'), icon: Plus },
+    { id: 'mood', label: t('dashboard.tabs.mood'), icon: Heart },
+    { id: 'game', label: t('dashboard.tabs.game'), icon: Gamepad2 },
+    { id: 'emergency', label: t('dashboard.tabs.emergency'), icon: Phone },
+    { id: 'reminders', label: t('dashboard.tabs.reminders'), icon: Calendar },
+    { id: 'messages', label: t('dashboard.tabs.messages'), icon: Mail },
   ];
 
   if (loading) {
@@ -350,24 +334,6 @@ export function PatientDashboard() {
 
   return (
     <div className="p-4 lg:p-8 bg-gray-50 min-h-screen space-y-6 lg:space-y-8">
-      {/* Audio Unlock Prompt */}
-      {showAudioPrompt && (
-        <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-lg shadow-md" role="alert">
-          <div className="flex items-center">
-            <div className="py-1"><svg className="fill-current h-6 w-6 text-yellow-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9 9a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1zm1-4a1 1 0 100 2 1 1 0 000-2z"/></svg></div>
-            <div className="flex-grow">
-              <p className="font-bold">Enable Audio Reminders</p>
-              <p className="text-sm">To hear your custom reminder sounds, please enable audio by clicking the button.</p>
-            </div>
-            <div className="ml-auto pl-3">
-              <button onClick={handleUnlockAudio} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200">
-                Enable Audio
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Notification Banner */}
       <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
         <div className="flex items-center">
@@ -378,12 +344,11 @@ export function PatientDashboard() {
           </div>
           <div className="ml-3">
             <h3 className="text-sm font-medium text-blue-800">
-              Audio Medication Reminders Active
+              {t('dashboard.remindersActive.title')}
             </h3>
             <div className="mt-2 text-sm text-blue-700">
               <p>
-                You'll receive audio notifications at your scheduled medication times. 
-                Make sure your browser notifications are enabled for the best experience.
+                {t('dashboard.remindersActive.body')}
               </p>
             </div>
           </div>
@@ -397,10 +362,10 @@ export function PatientDashboard() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
-                Welcome back, {user?.full_name}!
+                {t('dashboard.welcome.back', { name: user?.full_name })}
               </h1>
               <p className="text-lg text-gray-600 mt-1">
-                Today is {new Date().toLocaleDateString('en-US', { 
+                {t('dashboard.welcome.todayIs')} {new Date().toLocaleDateString(i18n.language, {
                   weekday: 'long', 
                   year: 'numeric', 
                   month: 'long', 
@@ -413,17 +378,17 @@ export function PatientDashboard() {
               <button
                 onClick={handleDownloadPDF}
                 className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors duration-200"
-                title="Download your health report as PDF"
+                title={t('dashboard.actions.downloadReport')}
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                <span>Download Report</span>
+                <span>{t('dashboard.actions.downloadReport')}</span>
               </button>
               
               <div className="text-right">
                 <div className="bg-blue-50 rounded-xl p-4">
-                  <p className="text-sm text-blue-600 font-medium">Today's Reminders</p>
+                  <p className="text-sm text-blue-600 font-medium">{t('dashboard.stats.todaysReminders')}</p>
                   <p className="text-2xl font-bold text-blue-700">{reminders.length}</p>
                 </div>
               </div>
@@ -436,7 +401,7 @@ export function PatientDashboard() {
               <div className="flex items-center">
                 <Pills className="h-8 w-8 text-green-600 mr-3" />
                 <div>
-                  <p className="text-sm text-green-600 font-medium">Active Medications</p>
+                  <p className="text-sm text-green-600 font-medium">{t('dashboard.stats.activeMedications')}</p>
                   <p className="text-xl font-bold text-green-700">{medications.length}</p>
                 </div>
               </div>
@@ -446,7 +411,7 @@ export function PatientDashboard() {
               <div className="flex items-center">
                 <Calendar className="h-8 w-8 text-yellow-600 mr-3" />
                 <div>
-                  <p className="text-sm text-yellow-600 font-medium">Low Stock Items</p>
+                  <p className="text-sm text-yellow-600 font-medium">{t('dashboard.stats.lowStockItems')}</p>
                   <p className="text-xl font-bold text-yellow-700">
                     {medications.filter(med => med.current_count <= med.low_stock_threshold).length}
                   </p>
@@ -458,8 +423,8 @@ export function PatientDashboard() {
               <div className="flex items-center">
                 <Heart className="h-8 w-8 text-purple-600 mr-3" />
                 <div>
-                  <p className="text-sm text-purple-600 font-medium">Mood Today</p>
-                  <p className="text-xl font-bold text-purple-700">Track Now</p>
+                  <p className="text-sm text-purple-600 font-medium">{t('dashboard.stats.moodToday')}</p>
+                  <p className="text-xl font-bold text-purple-700">{t('dashboard.stats.trackNow')}</p>
                 </div>
               </div>
             </div>
@@ -530,20 +495,20 @@ export function PatientDashboard() {
           {activeTab === 'reminders' && (
             <div>
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-bold">Reminders</h2>
-                <button onClick={openAddReminder} className="bg-blue-600 text-white px-4 py-2 rounded-lg">Add Reminder</button>
+                <h2 className="text-2xl font-bold">{t('dashboard.remindersTab.title')}</h2>
+                <button onClick={openAddReminder} className="bg-blue-600 text-white px-4 py-2 rounded-lg">{t('dashboard.remindersTab.add')}</button>
               </div>
               <ul className="space-y-2">
                 {reminders.map((reminder: any) => (
                   <li key={reminder._id} className="bg-gray-50 rounded-lg p-4 flex justify-between items-center">
                     <div>
-                      <div><span className="font-semibold">Time:</span> {reminder.reminder_time}</div>
-                      <div><span className="font-semibold">Acknowledged:</span> {reminder.acknowledged ? 'Yes' : 'No'}</div>
-                      <div><span className="font-semibold">Escalated:</span> {reminder.escalated ? 'Yes' : 'No'}</div>
+                      <div><span className="font-semibold">{t('dashboard.remindersTab.time')}:</span> {reminder.reminder_time}</div>
+                      <div><span className="font-semibold">{t('dashboard.remindersTab.acknowledged')}:</span> {reminder.acknowledged ? t('dashboard.remindersTab.yes') : t('dashboard.remindersTab.no')}</div>
+                      <div><span className="font-semibold">{t('dashboard.remindersTab.escalated')}:</span> {reminder.escalated ? t('dashboard.remindersTab.yes') : t('dashboard.remindersTab.no')}</div>
                     </div>
                     <div className="flex space-x-2">
-                      <button onClick={() => openEditReminder(reminder)} className="px-3 py-1 bg-gray-200 rounded">Edit</button>
-                      <button onClick={() => handleDeleteReminder(reminder._id)} className="px-3 py-1 bg-red-200 text-red-700 rounded">Delete</button>
+                      <button onClick={() => openEditReminder(reminder)} className="px-3 py-1 bg-gray-200 rounded">{t('dashboard.remindersTab.edit')}</button>
+                      <button onClick={() => handleDeleteReminder(reminder._id)} className="px-3 py-1 bg-red-200 text-red-700 rounded">{t('dashboard.remindersTab.delete')}</button>
                     </div>
                   </li>
                 ))}
@@ -552,14 +517,14 @@ export function PatientDashboard() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
                   <div className="bg-white rounded-xl p-8 w-full max-w-md shadow-xl relative">
                     <button className="absolute top-2 right-2 text-gray-500 hover:text-gray-700" onClick={() => setShowReminderModal(false)}>&times;</button>
-                    <h2 className="text-xl font-bold mb-4">{editingReminder ? 'Edit' : 'Add'} Reminder</h2>
+                    <h2 className="text-xl font-bold mb-4">{editingReminder ? t('dashboard.reminderModal.editTitle') : t('dashboard.reminderModal.addTitle')}</h2>
                     <form onSubmit={handleReminderSubmit} className="space-y-4">
                       <div>
-                        <label className="block text-lg font-medium text-gray-700 mb-1">Reminder Time</label>
+                        <label className="block text-lg font-medium text-gray-700 mb-1">{t('dashboard.reminderModal.timeLabel')}</label>
                         <input type="datetime-local" name="reminder_time" value={reminderForm.reminder_time} onChange={handleReminderFormChange} className="w-full px-4 py-2 border rounded-lg" required />
                       </div>
                       <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors duration-200">
-                        Save
+                        {t('dashboard.reminderModal.save')}
                       </button>
                     </form>
                   </div>

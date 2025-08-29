@@ -3,23 +3,10 @@ export class NotificationManager {
   private static instance: NotificationManager;
   private notificationSupported: boolean;
   private permissionGranted: boolean = false;
-  private audioContext: AudioContext | null = null;
-  private isAudioUnlocked: boolean = false;
   
   constructor() {
     this.notificationSupported = 'Notification' in window;
     this.checkPermissionStatus();
-    try {
-      // Create the AudioContext once.
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      // It starts in a 'suspended' state and must be resumed by a user gesture.
-      if (this.audioContext.state === 'suspended') {
-        console.log('AudioContext is suspended. Waiting for user interaction to unlock.');
-      }
-    } catch (e) {
-      console.error("Web Audio API is not supported in this browser.");
-      this.audioContext = null;
-    }
   }
   
   static getInstance(): NotificationManager {
@@ -78,41 +65,6 @@ export class NotificationManager {
     }, 100);
   }
 
-  /**
-   * Attempts to resume the AudioContext. This should be called from a user-initiated event
-   * (e.g., a click handler) to comply with browser autoplay policies.
-   */
-  public async unlockAudio(onUnlock?: () => void): Promise<void> {
-    if (this.isAudioUnlocked || !this.audioContext) {
-      if (this.isAudioUnlocked) {
-        onUnlock?.();
-      }
-      return;
-    }
-    if (this.audioContext.state === 'suspended') {
-      try {
-        await this.audioContext.resume();
-        this.isAudioUnlocked = this.audioContext.state === 'running';
-        if (this.isAudioUnlocked) {
-          console.log('AudioContext unlocked successfully.');
-          onUnlock?.();
-        } else {
-          console.warn('AudioContext unlock failed, state is:', this.audioContext.state);
-        }
-      } catch (e) {
-        console.error('Failed to unlock AudioContext:', e);
-      }
-    } else {
-      this.isAudioUnlocked = true;
-      console.log('AudioContext was already running.');
-      onUnlock?.();
-    }
-  }
-
-  public isAudioReady(): boolean {
-    return this.isAudioUnlocked;
-  }
-
   showMedicationReminder(medicationName: string, dosage: string, audioUrl?: string): void {
     console.log('Showing medication reminder:', { medicationName, dosage, permissionGranted: this.permissionGranted, notificationSupported: this.notificationSupported });
     
@@ -164,56 +116,53 @@ export class NotificationManager {
     }, 100);
   }
 
-  private async playReminderSound(audioUrl?: string): Promise<void> {
-    if (!audioUrl || !this.audioContext) {
-      this.playDefaultNotificationSound();
-      return;
-    }
-
-    // If audio is not unlocked, browser will likely block playback.
-    // We play the default sound as a fallback. The user needs to have interacted
-    // with the page before the first reminder for custom audio to work.
-    if (!this.isAudioUnlocked) {
-      console.warn('AudioContext not unlocked by user gesture. Playing default sound. Please click anywhere on the page first.');
-      this.playDefaultNotificationSound();
-      return;
-    }
-
+  private playReminderSound(audioUrl?: string): void {
     try {
-      const response = await fetch(audioUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch audio: ${response.statusText}`);
+      if (audioUrl) {
+        // Play custom audio
+        const audio = new Audio(audioUrl);
+        audio.volume = 0.7;
+        audio.play().catch(e => {
+          console.warn('Failed to play custom audio, falling back to default:', e);
+          this.playDefaultNotificationSound();
+        });
+      } else {
+        // Play default notification sound
+        this.playDefaultNotificationSound();
       }
-      const arrayBuffer = await response.arrayBuffer();
-      const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-
-      const source = this.audioContext.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(this.audioContext.destination);
-      source.start(0);
     } catch (error) {
-      console.error('Error playing custom audio via Web Audio API:', error);
-      this.playDefaultNotificationSound(); // Fallback to default sound on error
+      console.error('Error playing audio reminder:', error);
     }
   }
 
   private playDefaultNotificationSound(): void {
-    // This is a fallback for when the main AudioContext is not available or not unlocked.
-    // We use SpeechSynthesis as it often has different, more lenient autoplay policies.
-    if ('speechSynthesis' in window) {
-      try {
-        // Cancel any previous utterances to prevent them from queueing up.
-        speechSynthesis.cancel();
+    // Create a simple audio notification tone using Web Audio API
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.frequency.value = 800; // 800Hz tone
+      oscillator.type = 'sine';
+
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.5);
+    } catch (error) {
+      console.warn('Could not create audio notification:', error);
+      // Fallback: try to play a simple beep if available
+      if ('speechSynthesis' in window) {
+        // Use speech synthesis as last resort for audio feedback
         const utterance = new SpeechSynthesisUtterance('Medication reminder');
-        utterance.volume = 0.7;
-        utterance.rate = 1.1;
+        utterance.volume = 0.5;
+        utterance.rate = 1.2;
         speechSynthesis.speak(utterance);
-      } catch (speechError) {
-        console.error('Speech synthesis fallback failed:', speechError);
       }
-    } else {
-        // As a last resort, if even speech synthesis is not available, we can't make a sound.
-        console.warn('Could not play any default sound. Speech synthesis is not supported.');
     }
   }
 
