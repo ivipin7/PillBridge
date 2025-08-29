@@ -6,9 +6,11 @@ import { MessageModal } from '../messaging/MessageModal';
 
 interface PatientCardProps {
   patient: User;
+  onClick: () => void;
+  isSelected: boolean;
 }
 
-export function PatientCard({ patient }: PatientCardProps) {
+export function PatientCard({ patient, onClick, isSelected }: PatientCardProps) {
   const [medications, setMedications] = useState([]);
   const [todayReminders, setTodayReminders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -72,10 +74,17 @@ export function PatientCard({ patient }: PatientCardProps) {
   };
 
   return (
-    <div className="bg-gray-50 rounded-xl p-6 border border-gray-200 hover:shadow-md transition-shadow duration-200">
+    <div
+      className={`rounded-xl p-6 border transition-all duration-200 cursor-pointer ${
+        isSelected
+          ? 'bg-blue-50 border-blue-500 shadow-lg'
+          : 'bg-gray-50 border-gray-200 hover:shadow-md'
+      }`}
+      onClick={onClick}
+    >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center">
-          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center mr-3 ${isSelected ? 'bg-blue-100' : 'bg-gray-200'}`}>
             <Heart className="h-6 w-6 text-blue-600" />
           </div>
           <div>
