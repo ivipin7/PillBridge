@@ -279,4 +279,16 @@ export const apiClient = {
       return response.data;
     },
   },
+
+  // AI Assistant
+  ai: {
+    chat: async (patientId: string, prompt: string): Promise<{ response: string }> => {
+      const response = await api.post('/ai/chat', { patientId, prompt });
+      return response.data;
+    },
+    getChatHistory: async (patientId: string): Promise<Message[]> => { // Assuming Message type is compatible
+      const response = await api.get(`/ai/chat/${patientId}`);
+      return response.data;
+    },
+  },
 };
