@@ -286,7 +286,7 @@ export const apiClient = {
       const response = await api.post('/ai/chat', { patientId, prompt });
       return response.data;
     },
-    getChatHistory: async (patientId: string): Promise<Message[]> => { // Assuming Message type is compatible
+    getChatHistory: async (patientId: string): Promise<Message[]> => {
       const response = await api.get(`/ai/chat/${patientId}`);
       return response.data;
     },

@@ -17,7 +17,7 @@ var imagesRouter = require('./routes/images');
 var messagesRouter = require('./routes/messages');
 console.log('Loading PDF reports router...');
 var pdfReportsRouter = require('./routes/pdf_reports');
-var aiRouter = require('./routes/ai'); // Import the new AI router
+var aiRouter = require('./routes/ai');
 console.log('PDF reports router loaded successfully!');
 
 var app = express();
@@ -43,7 +43,7 @@ app.use('/emergency', emergencyRouter);
 app.use('/upload', uploadRouter);
 app.use('/images', imagesRouter);
 app.use('/messages', messagesRouter);
-app.use('/ai', aiRouter); // Register the AI router
+app.use('/ai', aiRouter);
 console.log('Registering PDF reports route...');
 app.use('/pdf-reports', pdfReportsRouter);
 console.log('PDF reports route registered at /pdf-reports');
