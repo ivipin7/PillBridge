@@ -1,41 +1,30 @@
 const express = require('express');
 const router = express.Router();
 const OpenAI = require('openai');
-const { getDB } = require('../db');
+const { connectDb } = require('../db'); // Corrected to use connectDb
 const { ObjectId } = require('mongodb');
 
-// Ensure the API key is loaded from .env
 require('dotenv').config();
 
-// Check if the API key is available
 if (!process.env.OPENAI_API_KEY) {
-  console.error("FATAL ERROR: OPENAI_API_KEY is not defined. Please check your .env file.");
-  process.exit(1);
+  console.error("FATAL ERROR: OPENAI_API_KEY is not defined in .env file.");
+  // process.exit(1); // Don't exit in dev, but log error
 }
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-/**
- * Constructs a detailed, context-rich prompt for the AI.
- * @param {object} patient - The patient's user document.
- * @param {Array<object>} medications - The patient's list of medications.
- * @param {Array<object>} moodEntries - The patient's recent mood entries.
- * @param {string} userPrompt - The caretaker's question.
- * @returns {string} The system prompt for the AI.
- */
 const constructSystemPrompt = (patient, medications, moodEntries, userPrompt) => {
   let prompt = `You are an expert medical AI assistant for a caregiver. Your role is to analyze patient data and provide clear, concise, and helpful answers. Be professional and empathetic.
 
 Here is the patient's data:
 - Name: ${patient.full_name}
-- Age: (Not provided in schema, but important context if available)
+- Age: (Not provided in schema)
 - Gender: (Not provided in schema)
-- Diagnosed Conditions/Allergies: (Not provided in schema)
 
 Medications:
-${medications.length > 0 ? medications.map(m => `- ${m.name} (${m.dosage}) - Instructions: ${m.instructions || 'N/A'}`).join('\n') : 'No medications listed.'}
+${medications.length > 0 ? medications.map(m => `- ${m.name} (${m.dosage})`).join('\n') : 'No medications listed.'}
 
 Recent Mood Logs (last 7 days):
 ${moodEntries.length > 0 ? moodEntries.map(e => `- Date: ${new Date(e.date).toLocaleDateString()}, Score: ${e.mood_score}/5, Notes: ${e.notes || 'N/A'}`).join('\n') : 'No recent mood logs.'}
@@ -47,74 +36,76 @@ Caregiver's question: "${userPrompt}"`;
   return prompt;
 };
 
-// POST /ai/chat - Handle a new chat message
+// POST /ai/chat
 router.post('/chat', async (req, res) => {
+  console.log('--- AI Chat Request Received ---');
   const { patientId, prompt } = req.body;
+  console.log(`[AI] Request for patientId: ${patientId}, Prompt: "${prompt}"`);
 
   if (!patientId || !prompt) {
+    console.error('[AI] Validation Error: patientId and prompt are required.');
     return res.status(400).json({ error: 'patientId and prompt are required' });
   }
 
   try {
-    const db = getDB();
+    const db = await connectDb();
+    console.log('[AI] Fetching patient from DB...');
     const patient = await db.collection('users').findOne({ _id: new ObjectId(patientId) });
 
     if (!patient) {
+      console.error(`[AI] Patient with ID ${patientId} not found.`);
       return res.status(404).json({ error: 'Patient not found' });
     }
+    console.log(`[AI] Found patient: ${patient.full_name}`);
 
-    // Fetch related patient data for context
+    console.log('[AI] Fetching medications...');
     const medications = await db.collection('medications').find({ patient_id: patientId }).toArray();
+    console.log(`[AI] Found ${medications.length} medications.`);
+
+    console.log('[AI] Fetching recent mood entries...');
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const moodEntries = await db.collection('mood_entries').find({ patient_id: patientId, date: { $gte: sevenDaysAgo.toISOString() } }).sort({ date: -1 }).toArray();
+    console.log(`[AI] Found ${moodEntries.length} mood entries.`);
 
     const systemPrompt = constructSystemPrompt(patient, medications, moodEntries, prompt);
+    console.log('[AI] Constructed System Prompt:', systemPrompt);
 
+    console.log('[AI] Sending request to OpenAI...');
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo", // Or "gpt-4" if available and preferred
+      model: "gpt-3.5-turbo",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: prompt } // We include the user prompt here again for clarity in the chat flow
+        { role: "user", content: prompt }
       ],
     });
 
     const aiResponse = completion.choices[0].message.content;
+    console.log('[AI] Received response from OpenAI:', aiResponse);
 
-    // Save conversation to database
-    const chatMessage = {
-      patient_id: patientId,
-      sender: 'user',
-      content: prompt,
-      timestamp: new Date(),
-    };
-    const aiMessage = {
-      patient_id: patientId,
-      sender: 'ai',
-      content: aiResponse,
-      timestamp: new Date(),
-    };
-
+    console.log('[AI] Saving conversation to chat_history...');
+    const chatMessage = { patient_id: patientId, sender: 'user', content: prompt, timestamp: new Date() };
+    const aiMessage = { patient_id: patientId, sender: 'ai', content: aiResponse, timestamp: new Date() };
     await db.collection('chat_history').insertMany([chatMessage, aiMessage]);
+    console.log('[AI] Conversation saved.');
 
     res.json({ response: aiResponse });
 
   } catch (error) {
-    console.error('Error with OpenAI API or database:', error);
-    res.status(500).json({ error: 'Failed to get AI response' });
+    console.error('--- [AI] Critical Error ---');
+    console.error(error);
+    res.status(500).json({ error: 'Failed to get AI response due to a server error.' });
   }
 });
 
-// GET /ai/chat/:patientId - Retrieve chat history for a patient
+// GET /ai/chat/:patientId
 router.get('/chat/:patientId', async (req, res) => {
   const { patientId } = req.params;
-
   if (!patientId) {
     return res.status(400).json({ error: 'patientId is required' });
   }
-
   try {
-    const db = getDB();
+    const db = await connectDb();
     const history = await db.collection('chat_history').find({ patient_id: patientId }).sort({ timestamp: 1 }).toArray();
     res.json(history);
   } catch (error) {
