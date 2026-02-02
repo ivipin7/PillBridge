@@ -6,12 +6,12 @@ This guide will help you troubleshoot image upload problems in the AddMedication
 
 ### 1. **Backend Server Status**
 ```bash
-# Make sure the backend server is running
+# Make sure the backend serverbis ruunning
 cd backend
 node server.js
 ```
 
-You should see:
+You should see
 ```
 🚀 Backend server running on http://localhost:3000
 📸 Image upload endpoint: POST /images
