@@ -260,6 +260,18 @@ export function AuthForm() {
             </button>
           </form>
 
+          <div className="mt-6 flex flex-col items-center">
+            <span className="text-gray-500 mb-2">or</span>
+            <a
+              href="http://localhost:3000/auth/google"
+              className="w-full flex items-center justify-center bg-white border border-gray-300 rounded-lg px-4 py-3 text-lg font-semibold text-gray-700 hover:bg-gray-50 transition-colors duration-200 shadow-sm"
+              style={{ textDecoration: 'none' }}
+            >
+              <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google" className="h-6 w-6 mr-3" />
+              Continue with Google
+            </a>
+          </form>
+
           <div className="mt-6 text-center">
             <button
               type="button"
