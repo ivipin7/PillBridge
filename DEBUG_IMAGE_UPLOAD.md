@@ -14,7 +14,7 @@ node server.js
 You should see:
 ```
 🚀 Backend server running on http://localhost:3000
-📸 Image upload endpoint: POST /images
+📸 Image upload endpoint: POST /image
 ```
 
 ### 2. **MongoDB Connection**
