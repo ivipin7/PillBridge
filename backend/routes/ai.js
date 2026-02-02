@@ -114,4 +114,70 @@ router.get('/chat/:patientId', async (req, res) => {
   }
 });
 
+// POST /ai/report
+router.post('/report', async (req, res) => {
+  console.log('--- AI Report Request Received ---');
+  const { patientId } = req.body;
+  console.log(`[AI] Report request for patientId: ${patientId}`);
+
+  if (!patientId) {
+    console.error('[AI] Validation Error: patientId is required.');
+    return res.status(400).json({ error: 'patientId is required' });
+  }
+
+  try {
+    const db = await connectDb();
+    console.log('[AI] Fetching patient from DB...');
+    const patient = await db.collection('users').findOne({ _id: new ObjectId(patientId) });
+
+    if (!patient) {
+      console.error(`[AI] Patient with ID ${patientId} not found.`);
+      return res.status(404).json({ error: 'Patient not found' });
+    }
+    console.log(`[AI] Found patient: ${patient.full_name}`);
+
+    console.log('[AI] Fetching medications...');
+    const medications = await db.collection('medications').find({ patient_id: patientId }).toArray();
+    console.log(`[AI] Found ${medications.length} medications.`);
+
+    console.log('[AI] Fetching recent mood entries...');
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const moodEntries = await db.collection('mood_entries').find({ patient_id: patientId, date: { $gte: sevenDaysAgo.toISOString() } }).sort({ date: -1 }).toArray();
+    console.log(`[AI] Found ${moodEntries.length} mood entries.`);
+
+    // Construct a report prompt
+    const reportPrompt = `Generate a comprehensive weekly health report for the patient based on the following data. Include medication adherence, mood trends, and any recommendations.
+
+Patient: ${patient.full_name}
+
+Medications:
+${medications.length > 0 ? medications.map(m => `- ${m.name} (${m.dosage})`).join('\n') : 'No medications listed.'}
+
+Recent Mood Logs (last 7 days):
+${moodEntries.length > 0 ? moodEntries.map(e => `- Date: ${new Date(e.date).toLocaleDateString()}, Score: ${e.mood_score}/5, Notes: ${e.notes || 'N/A'}`).join('\n') : 'No recent mood logs.'}
+
+Please provide a structured report with sections for Medication Summary, Mood Analysis, and Caregiver Recommendations.`;
+
+    console.log('[AI] Sending report request to OpenAI...');
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        { role: "system", content: "You are a medical AI assistant generating health reports for caregivers. Be detailed, professional, and empathetic." },
+        { role: "user", content: reportPrompt }
+      ],
+    });
+
+    const reportResponse = completion.choices[0].message.content;
+    console.log('[AI] Generated report:', reportResponse);
+
+    res.json({ report: reportResponse });
+
+  } catch (error) {
+    console.error('--- [AI] Report Generation Error ---');
+    console.error(error);
+    res.status(500).json({ error: 'Failed to generate report due to a server error.' });
+  }
+});
+
 module.exports = router;

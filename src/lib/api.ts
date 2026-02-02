@@ -290,5 +290,9 @@ export const apiClient = {
       const response = await api.get(`/ai/chat/${patientId}`);
       return response.data;
     },
+    generateReport: async (patientId: string): Promise<{ report: string }> => {
+      const response = await api.post('/ai/report', { patientId });
+      return response.data;
+    },
   },
 };

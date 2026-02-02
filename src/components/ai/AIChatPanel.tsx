@@ -72,8 +72,21 @@ export function AIChatPanel({ patientId, patientName }: AIChatPanelProps) {
     }
   };
 
-  const handleSuggestedPrompt = (prompt: string) => {
-    setInput(prompt);
+  const handleGenerateReport = async () => {
+    if (!patientId) return;
+
+    setIsLoading(true);
+    try {
+      const response = await apiClient.ai.generateReport(patientId);
+      const reportMessage: ChatMessage = { sender: 'ai', content: `**Weekly Health Report**\n\n${response.report}` };
+      setMessages(prev => [...prev, reportMessage]);
+    } catch (error) {
+      console.error('Failed to generate report:', error);
+      const errorMessage: ChatMessage = { sender: 'ai', content: 'Sorry, I encountered an error generating the report. Please try again.' };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const suggestedPrompts = [
@@ -127,6 +140,15 @@ export function AIChatPanel({ patientId, patientName }: AIChatPanelProps) {
         </div>
 
         <div className="p-4 border-t border-gray-200">
+            <div className="mb-4">
+                <button
+                    onClick={handleGenerateReport}
+                    disabled={isLoading}
+                    className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-green-300 transition-colors"
+                >
+                    {isLoading ? 'Generating Report...' : 'Generate Weekly Health Report'}
+                </button>
+            </div>
             <div className="mb-2 flex flex-wrap gap-2">
                 {suggestedPrompts.map(prompt => (
                     <button
