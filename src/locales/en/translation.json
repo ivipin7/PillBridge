@@ -1,0 +1,60 @@
+{
+  "layout": {
+    "title": "PillBridge",
+    "subtitle": "Medication Care Made Simple",
+    "caregiver": "Caregiver",
+    "patient": "Patient",
+    "signOut": "Sign Out"
+  },
+  "dashboard": {
+    "audioPrompt": {
+      "title": "Enable Audio Reminders",
+      "body": "To hear your custom reminder sounds, please enable audio by clicking the button.",
+      "button": "Enable Audio"
+    },
+    "remindersActive": {
+      "title": "Audio Medication Reminders Active",
+      "body": "You'll receive audio notifications at your scheduled medication times. Make sure your browser notifications are enabled for the best experience."
+    },
+    "welcome": {
+      "back": "Welcome back, {{name}}!",
+      "todayIs": "Today is"
+    },
+    "actions": {
+      "downloadReport": "Download Report"
+    },
+    "stats": {
+      "todaysReminders": "Today's Reminders",
+      "activeMedications": "Active Medications",
+      "lowStockItems": "Low Stock Items",
+      "moodToday": "Mood Today",
+      "trackNow": "Track Now"
+    },
+    "tabs": {
+      "medications": "My Medications",
+      "addMedication": "Add Medication",
+      "mood": "Daily Check-in",
+      "game": "Pill Game",
+      "emergency": "Emergency",
+      "reminders": "Reminders",
+      "messages": "Messages"
+    },
+    "remindersTab": {
+      "title": "Reminders",
+      "add": "Add Reminder",
+      "time": "Time",
+      "acknowledged": "Acknowledged",
+      "escalated": "Escalated",
+      "yes": "Yes",
+      "no": "No",
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "reminderModal": {
+      "editTitle": "Edit Reminder",
+      "addTitle": "Add Reminder",
+      "timeLabel": "Reminder Time",
+      "save": "Save"
+    }
+  }
+}

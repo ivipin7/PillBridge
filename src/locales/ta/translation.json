@@ -1,0 +1,60 @@
+{
+  "layout": {
+    "title": "TA: PillBridge",
+    "subtitle": "TA: Medication Care Made Simple",
+    "caregiver": "TA: Caregiver",
+    "patient": "TA: Patient",
+    "signOut": "TA: Sign Out"
+  },
+  "dashboard": {
+    "audioPrompt": {
+      "title": "TA: Enable Audio Reminders",
+      "body": "TA: To hear your custom reminder sounds, please enable audio by clicking the button.",
+      "button": "TA: Enable Audio"
+    },
+    "remindersActive": {
+      "title": "TA: Audio Medication Reminders Active",
+      "body": "TA: You'll receive audio notifications at your scheduled medication times. Make sure your browser notifications are enabled for the best experience."
+    },
+    "welcome": {
+      "back": "TA: Welcome back, {{name}}!",
+      "todayIs": "TA: Today is"
+    },
+    "actions": {
+      "downloadReport": "TA: Download Report"
+    },
+    "stats": {
+      "todaysReminders": "TA: Today's Reminders",
+      "activeMedications": "TA: Active Medications",
+      "lowStockItems": "TA: Low Stock Items",
+      "moodToday": "TA: Mood Today",
+      "trackNow": "TA: Track Now"
+    },
+    "tabs": {
+      "medications": "TA: My Medications",
+      "addMedication": "TA: Add Medication",
+      "mood": "TA: Daily Check-in",
+      "game": "TA: Pill Game",
+      "emergency": "TA: Emergency",
+      "reminders": "TA: Reminders",
+      "messages": "TA: Messages"
+    },
+    "remindersTab": {
+      "title": "TA: Reminders",
+      "add": "TA: Add Reminder",
+      "time": "TA: Time",
+      "acknowledged": "TA: Acknowledged",
+      "escalated": "TA: Escalated",
+      "yes": "TA: Yes",
+      "no": "TA: No",
+      "edit": "TA: Edit",
+      "delete": "TA: Delete"
+    },
+    "reminderModal": {
+      "editTitle": "TA: Edit Reminder",
+      "addTitle": "TA: Add Reminder",
+      "timeLabel": "TA: Reminder Time",
+      "save": "TA: Save"
+    }
+  }
+}
